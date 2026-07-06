@@ -22,15 +22,20 @@ change.
 - Feature spec 02 (editor): components/editor/editor-navbar.tsx and
   components/editor/project-sidebar.tsx created; dialog pattern ready for
   future use
+- Feature spec 03 (auth): Clerk provider, sign-in/sign-up pages, proxy.ts
+  route protection, `/` redirect logic, UserButton in editor navbar
+- Feature spec 04 (project dialogs): editor home screen (EditorHome), Create/
+  Rename/Delete dialogs (ProjectDialogs), useProjectDialogs hook, sidebar
+  project items with owner-only rename/delete actions, mobile backdrop scrim,
+  live slug preview. Mock data (lib/projects.ts) only, no persistence.
 
 ## In Progress
 
-- Feature spec 03 (auth): Clerk provider, sign-in/sign-up pages, proxy.ts
-  route protection, `/` redirect logic, UserButton in editor navbar
+- None
 
 ## Next Up
 
-- Feature specs 04+
+- Feature specs 05+
 
 ## Open Questions
 

@@ -27,7 +27,16 @@ export function EditorNavbar({
         </Button>
       </div>
       <div className="flex flex-1 items-center justify-center" />
-      <div className="flex flex-1 items-center justify-end" />
+      <div className="flex flex-1 items-center justify-end">
+        <UserButton
+          showName
+          appearance={{
+            elements: {
+              userButtonAvatarBox: "h-7 w-7",
+            },
+          }}
+        />
+      </div>
     </nav>
   )
 }
