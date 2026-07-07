@@ -16,6 +16,8 @@ interface ProjectSidebarProps {
   onClose: () => void
   projects: Project[]
   sharedProjects: Project[]
+  /** ID of the project whose workspace is currently open, if any. */
+  currentProjectId?: string
   onCreateProject: () => void
   onRenameProject: (project: Project) => void
   onDeleteProject: (project: Project) => void
@@ -23,15 +25,22 @@ interface ProjectSidebarProps {
 
 function ProjectItem({
   project,
+  isCurrent = false,
   onRename,
   onDelete,
 }: {
   project: Project
+  isCurrent?: boolean
   onRename: (project: Project) => void
   onDelete: (project: Project) => void
 }) {
   return (
-    <div className="group/item flex items-center gap-1 rounded-lg px-2 py-1.5 hover:bg-muted/50">
+    <div
+      aria-current={isCurrent ? "page" : undefined}
+      className={`group/item flex items-center gap-1 rounded-lg px-2 py-1.5 ${
+        isCurrent ? "bg-muted" : "hover:bg-muted/50"
+      }`}
+    >
       <div className="flex min-w-0 flex-1 flex-col">
         <span className="truncate text-sm text-foreground">
           {project.name}
@@ -70,6 +79,7 @@ export function ProjectSidebar({
   onClose,
   projects,
   sharedProjects,
+  currentProjectId,
   onCreateProject,
   onRenameProject,
   onDeleteProject,
@@ -126,6 +136,7 @@ export function ProjectSidebar({
                   <ProjectItem
                     key={project.id}
                     project={project}
+                    isCurrent={project.id === currentProjectId}
                     onRename={onRenameProject}
                     onDelete={onDeleteProject}
                   />
@@ -145,6 +156,7 @@ export function ProjectSidebar({
                   <ProjectItem
                     key={project.id}
                     project={project}
+                    isCurrent={project.id === currentProjectId}
                     onRename={onRenameProject}
                     onDelete={onDeleteProject}
                   />

@@ -53,13 +53,38 @@ change.
   /api/projects now accepts an optional explicit id. Old use-project-dialogs
   hook and mock project arrays removed. `npm run build` passes.
 
+- Feature spec 08 (editor workspace shell): app/editor/[roomId]/page.tsx server
+  component with access checks (redirect /sign-in when unauth; AccessDenied for
+  missing/unauthorized). lib/project-access.ts (getCurrentIdentity +
+  getAccessibleProject by owner/collaborator), components/editor/access-denied
+  .tsx (lock icon, message, link to /editor), workspace-navbar (project name,
+  Share + AI-sidebar toggle), workspace-shell composing the existing
+  ProjectSidebar (current room highlighted via currentProjectId) + dark canvas
+  placeholder + collapsible right AI sidebar placeholder. No canvas/Liveblocks/
+  AI/share logic yet. `npm run build` passes; /editor/[roomId] registered.
+
+- Feature spec 09 (share dialog): components/editor/share-dialog.tsx opened from
+  the workspace navbar Share button (WorkspaceNavbar gained an onShare prop;
+  WorkspaceShell owns the isShareOpen state and passes canManage={project.owned}).
+  Owners can invite by email, see the collaborator list, remove collaborators,
+  and copy the project link (/editor/[id]) with temporary "Copied!" feedback;
+  collaborators get a read-only list (no invite/remove/copy). Backend:
+  app/api/projects/[projectId]/collaborators/route.ts — GET (owner or
+  collaborator may view; reports isOwner), POST (owner-only invite, idempotent
+  upsert on the projectId_email unique, email validated + lowercased), DELETE
+  (owner-only remove by email). lib/collaborators.ts enrichCollaborators() uses
+  clerkClient().users.getUserList({ emailAddress }) to add name + avatar,
+  falling back to email-only when no Clerk user matches or the lookup throws. No
+  local user table added. `npm run build` passes; collaborators route
+  registered.
+
 ## In Progress
 
 - None
 
 ## Next Up
 
-- Feature specs 08+
+- Feature specs 10+
 
 ## Open Questions
 
