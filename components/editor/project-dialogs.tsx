@@ -12,25 +12,25 @@ import {
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import type { UseProjectDialogs } from "@/hooks/use-project-dialogs"
+import type { UseProjectActions } from "@/hooks/use-project-actions"
 
 interface ProjectDialogsProps {
-  dialogs: UseProjectDialogs
+  actions: UseProjectActions
 }
 
-export function ProjectDialogs({ dialogs }: ProjectDialogsProps) {
+export function ProjectDialogs({ actions }: ProjectDialogsProps) {
   const {
     openDialog,
     activeProject,
     name,
-    slug,
+    roomId,
     isLoading,
     setName,
     close,
     submitCreate,
     submitRename,
     submitDelete,
-  } = dialogs
+  } = actions
 
   const renameInputRef = useRef<HTMLInputElement>(null)
 
@@ -75,9 +75,9 @@ export function ProjectDialogs({ dialogs }: ProjectDialogsProps) {
                 onChange={(e) => setName(e.target.value)}
               />
               <p className="text-xs text-muted-foreground">
-                Slug:{" "}
+                Room ID:{" "}
                 <span className="font-mono text-foreground">
-                  {slug || "—"}
+                  {roomId || "—"}
                 </span>
               </p>
             </div>

@@ -19,15 +19,16 @@ export function slugify(name: string): string {
     .replace(/^-+|-+$/g, "")
 }
 
-/** Mock project data — no persistence yet. */
-export const mockProjects: Project[] = [
-  { id: "1", name: "Payments Platform", slug: "payments-platform", owned: true },
-  { id: "2", name: "Realtime Analytics", slug: "realtime-analytics", owned: true },
-  { id: "3", name: "Internal Design System", slug: "internal-design-system", owned: true },
-]
+/** Generate a short, reasonably unique suffix for room IDs. */
+export function generateRoomSuffix(): string {
+  return Math.random().toString(36).slice(2, 8)
+}
 
-/** Mock projects shared with the current user by other people. */
-export const mockSharedProjects: Project[] = [
-  { id: "4", name: "Growth Experiments", slug: "growth-experiments", owned: false },
-  { id: "5", name: "Billing Migration", slug: "billing-migration", owned: false },
-]
+/**
+ * Build a Liveblocks room ID from a project name: the slug plus a short unique
+ * suffix. This value is also used as the project ID so the two stay aligned.
+ */
+export function buildRoomId(name: string, suffix: string): string {
+  const slug = slugify(name)
+  return slug ? `${slug}-${suffix}` : suffix
+}

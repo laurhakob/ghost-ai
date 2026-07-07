@@ -28,6 +28,30 @@ change.
   Rename/Delete dialogs (ProjectDialogs), useProjectDialogs hook, sidebar
   project items with owner-only rename/delete actions, mobile backdrop scrim,
   live slug preview. Mock data (lib/projects.ts) only, no persistence.
+- Feature spec 05 (prisma): Project + ProjectCollaborator models in
+  prisma/models/project.prisma (multi-file schema; prisma.config schema now
+  points at the prisma/ folder), ProjectStatus enum (DRAFT/ARCHIVED),
+  lib/prisma.ts cached singleton branching on DATABASE_URL (prisma+postgres://
+  -> Accelerate, else @prisma/adapter-pg), first migration
+  20260706085933_init applied, client generated. `npm run build` passes.
+- Feature spec 06 (project APIs): backend REST route handlers —
+  app/api/projects/route.ts (GET list current user's projects ordered by
+  createdAt desc; POST create, name defaults to "Untitled Project", cuid id)
+  and app/api/projects/[projectId]/route.ts (PATCH rename, DELETE). Clerk
+  userId as ownerId; 401 when unauthenticated, 404 when missing, 403 for
+  non-owner mutations. Backend-only, UI not wired. `npm run build` passes.
+
+- Feature spec 07 (wire editor home): app/editor/page.tsx is now an async
+  server component fetching owned + shared projects via lib/projects-data.ts
+  (getOwnedProjects/getSharedProjects) and passing both to EditorShell (client)
+  → sidebar; no client fetch on initial load. hooks/use-project-actions.ts
+  manages dialog state + mutations: create builds a room ID (slug + short
+  suffix via buildRoomId/generateRoomSuffix) sent as the project id so id and
+  room ID stay aligned, then navigates to /editor/[id]; rename PATCHes +
+  router.refresh(); delete redirects to /editor if deleting the active
+  workspace else router.refresh(). Create dialog previews the room ID. POST
+  /api/projects now accepts an optional explicit id. Old use-project-dialogs
+  hook and mock project arrays removed. `npm run build` passes.
 
 ## In Progress
 
@@ -35,7 +59,7 @@ change.
 
 ## Next Up
 
-- Feature specs 05+
+- Feature specs 08+
 
 ## Open Questions
 
