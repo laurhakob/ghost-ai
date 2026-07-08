@@ -14,7 +14,7 @@ import {
 
 import { CanvasShape } from "@/components/editor/canvas-shape"
 import {
-  DEFAULT_NODE_COLOR,
+  DEFAULT_NODE_COLOR_PAIR,
   SHAPE_DRAG_TYPE,
   type CanvasNodeShape,
   type ShapeDragPayload,
@@ -112,7 +112,11 @@ export function ShapePanel() {
             }}
             style={{ width: def.width, height: def.height }}
           >
-            <CanvasShape shape={def.shape} color={DEFAULT_NODE_COLOR} />
+            <CanvasShape
+              shape={def.shape}
+              background={DEFAULT_NODE_COLOR_PAIR.background}
+              textColor={DEFAULT_NODE_COLOR_PAIR.text}
+            />
           </div>
         ))}
       </div>

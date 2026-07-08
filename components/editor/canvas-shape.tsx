@@ -2,9 +2,6 @@
 
 import type { CanvasNodeShape } from "@/types/canvas"
 
-/** Node fill — matches the dark canvas surface (neutral-900 at 80%). */
-const SHAPE_FILL = "rgba(23, 23, 23, 0.8)"
-
 /** Shapes drawn with SVG so they can stretch to arbitrary node sizes. */
 const SVG_SHAPES = new Set<CanvasNodeShape>(["diamond", "hexagon", "cylinder"])
 
@@ -18,8 +15,10 @@ function withAlpha(color: string, alpha: string): string {
 
 interface CanvasShapeProps {
   shape: CanvasNodeShape
-  /** Accent color used for the border/stroke. */
-  color: string
+  /** Background/fill color for the shape. */
+  background: string
+  /** Text color, also used for the border/stroke and selection glow. */
+  textColor: string
   /** Brightens the border and adds a glow when the node is selected. */
   selected?: boolean
   /** Optional centered label. */
@@ -32,12 +31,20 @@ interface CanvasShapeProps {
  * and cylinder are SVGs that stretch with the node via `preserveAspectRatio`
  * while keeping a constant stroke width (`vectorEffect="non-scaling-stroke"`).
  *
- * Borders stay subtle at rest and brighten (plus a soft glow) when selected.
- * Shared by the node renderer and the shape-panel drag preview so both always
- * draw the same thing.
+ * The fill is the node's `background` color and the label/border/glow use the
+ * paired `textColor`; borders stay subtle at rest and brighten (plus a soft
+ * glow) when selected. Shared by the node renderer and the shape-panel drag
+ * preview so both always draw the same thing.
  */
-export function CanvasShape({ shape, color, selected, label }: CanvasShapeProps) {
-  const stroke = selected ? color : withAlpha(color, "80")
+export function CanvasShape({
+  shape,
+  background,
+  textColor,
+  selected,
+  label,
+}: CanvasShapeProps) {
+  const fill = background
+  const stroke = selected ? textColor : withAlpha(textColor, "80")
   const strokeWidth = selected ? 2.5 : 2
   const isSvg = SVG_SHAPES.has(shape)
 
@@ -46,7 +53,7 @@ export function CanvasShape({ shape, color, selected, label }: CanvasShapeProps)
       className="relative h-full w-full"
       style={
         selected
-          ? { filter: `drop-shadow(0 0 6px ${withAlpha(color, "aa")})` }
+          ? { filter: `drop-shadow(0 0 6px ${withAlpha(textColor, "aa")})` }
           : undefined
       }
     >
@@ -59,7 +66,7 @@ export function CanvasShape({ shape, color, selected, label }: CanvasShapeProps)
           {shape === "diamond" && (
             <polygon
               points="50,2 98,50 50,98 2,50"
-              fill={SHAPE_FILL}
+              fill={fill}
               stroke={stroke}
               strokeWidth={strokeWidth}
               strokeLinejoin="round"
@@ -69,7 +76,7 @@ export function CanvasShape({ shape, color, selected, label }: CanvasShapeProps)
           {shape === "hexagon" && (
             <polygon
               points="25,3 75,3 98,50 75,97 25,97 2,50"
-              fill={SHAPE_FILL}
+              fill={fill}
               stroke={stroke}
               strokeWidth={strokeWidth}
               strokeLinejoin="round"
@@ -81,7 +88,7 @@ export function CanvasShape({ shape, color, selected, label }: CanvasShapeProps)
               {/* Body fill, from the top ellipse's front edge to the bottom. */}
               <path
                 d="M2,14 A48,12 0 0 0 98,14 L98,86 A48,12 0 0 0 2,86 Z"
-                fill={SHAPE_FILL}
+                fill={fill}
               />
               {/* Sides + bottom rim. */}
               <path
@@ -109,7 +116,7 @@ export function CanvasShape({ shape, color, selected, label }: CanvasShapeProps)
         <div
           className="absolute inset-0"
           style={{
-            background: SHAPE_FILL,
+            background: fill,
             border: `${strokeWidth}px solid ${stroke}`,
             // Pill and circle are fully rounded; rectangle gets a soft radius.
             borderRadius:
@@ -120,7 +127,10 @@ export function CanvasShape({ shape, color, selected, label }: CanvasShapeProps)
 
       {label ? (
         <div className="absolute inset-0 flex items-center justify-center px-3">
-          <span className="pointer-events-none truncate text-center text-sm text-neutral-100">
+          <span
+            className="pointer-events-none truncate text-center text-sm"
+            style={{ color: textColor }}
+          >
             {label}
           </span>
         </div>

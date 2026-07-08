@@ -159,13 +159,57 @@ change.
   shape-panel layout or drop-handler changes (out of scope). `npm run build`
   passes.
 
+- Feature spec 14 (node resizing + inline label editing): canvas-node.tsx
+  (CanvasNodeRenderer) now overlays two editing affordances on the shape.
+  Resize: a `<NodeResizer isVisible={selected}>` with MIN_NODE_SIZE=48 min
+  width/height, subtle neutral-600 (#525252) 8px rounded handles + faint lines
+  to match the dark canvas; drag-resize dispatches dimension changes through
+  the existing onNodesChange pipeline (so Liveblocks syncs dimensions). Label
+  editing: double-click anywhere on the node opens a centered textarea pinned
+  over the label (absolute inset-0 flex-center px-3, same slot the shape draws
+  its label in — no layout shift); CanvasShape is passed label="" while editing
+  so only the textarea shows. Local `draft` state updates as you type; commit on
+  blur via useReactFlow().updateNodeData(id,{label}) (which flows through
+  onNodesChange as a replace change → Liveblocks sync); Escape cancels/reverts;
+  a useEffect mirrors remote label edits into draft when not editing, another
+  focuses+selects on open. `nodrag`/`nopan` on the textarea stop text
+  interactions from dragging the node or panning the canvas. Empty nodes show a
+  centered "Double-click to add label" neutral-600 placeholder in the same
+  position. No shape-rendering, shape-panel, drag-preview, or drop-handler
+  changes (out of scope). `npm run build` passes.
+
+- Feature spec 15 (node color toolbar): selected nodes get a floating swatch
+  toolbar to change their background + paired text color. ui-context.md has no
+  real node palette (still the template) and global.css only holds shadcn
+  tokens, so per spec the palette lives in types/canvas.ts: NodeColorPair
+  ({ id, background, text }) + NODE_COLORS (6 dark tinted surfaces with vivid
+  paired text: slate/sky/emerald/amber/rose/violet) + DEFAULT_NODE_COLOR_PAIR
+  (slate). CanvasNodeData gained `textColor`; `color` is now the background/fill
+  (was the border accent). canvas-shape.tsx: dropped the fixed SHAPE_FILL const —
+  fill = background, and the label/border/selection-glow use textColor (subtle
+  at rest via withAlpha, bright when selected); label span color set inline.
+  New components/editor/node-color-toolbar.tsx wraps xyflow <NodeToolbar
+  position=Top offset=12 isVisible={selected}> and renders one Swatch per pair;
+  a swatch fills with the background, shows an "A" in the text color, gets a
+  bright ring when active (matched by background equality), and a tight
+  text-color glow on hover (boxShadow 0 0 6px 0, no spread). nodrag/nopan on the
+  toolbar + onPointerDown/onClick stopPropagation on swatches keep interactions
+  from dragging the node or panning. Selecting a swatch calls
+  useReactFlow().updateNodeData(id,{color,textColor}) → onNodesChange replace →
+  Liveblocks sync (no server calls). canvas-node.tsx renders the toolbar and
+  passes background/textColor to CanvasShape; the editing textarea now colors
+  text with data.textColor too. canvas.tsx onDrop and shape-panel.tsx drag
+  preview updated to the pair model (DEFAULT_NODE_COLOR removed). No drag/drop,
+  selection, or full color-picker changes (out of scope). `npm run build`
+  passes.
+
 ## In Progress
 
 - None
 
 ## Next Up
 
-- Feature specs 14+
+- Feature specs 16+
 
 ## Open Questions
 

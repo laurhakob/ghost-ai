@@ -23,7 +23,7 @@ import { CanvasNodeRenderer } from "@/components/editor/canvas-node"
 import { ShapePanel } from "@/components/editor/shape-panel"
 import {
   CANVAS_NODE_TYPE,
-  DEFAULT_NODE_COLOR,
+  DEFAULT_NODE_COLOR_PAIR,
   SHAPE_DRAG_TYPE,
   type CanvasEdge,
   type CanvasNode,
@@ -125,7 +125,12 @@ function FlowCanvasInner() {
         width: payload.width,
         height: payload.height,
         style: { width: payload.width, height: payload.height },
-        data: { label: "", color: DEFAULT_NODE_COLOR, shape: payload.shape },
+        data: {
+          label: "",
+          color: DEFAULT_NODE_COLOR_PAIR.background,
+          textColor: DEFAULT_NODE_COLOR_PAIR.text,
+          shape: payload.shape,
+        },
       }
 
       onNodesChange([{ type: "add", item: newNode }])

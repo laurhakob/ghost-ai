@@ -19,15 +19,45 @@ export type CanvasNodeShape =
 export interface CanvasNodeData {
   /** Text label displayed on the node. */
   label: string
-  /** Fill/accent color for the node. */
+  /** Background/fill color for the node. */
   color: string
+  /** Label text color, paired with {@link color} for contrast. */
+  textColor: string
   /** Which shape the node renders as. */
   shape: CanvasNodeShape
   [key: string]: unknown
 }
 
-/** Default fill/accent color applied to freshly dropped nodes. */
-export const DEFAULT_NODE_COLOR = "#64B5F6"
+/**
+ * A predefined node color theme: a background/fill paired with a matching text
+ * color chosen to stay legible on that background. The color toolbar offers one
+ * swatch per pair; there is no free-form color picker.
+ */
+export interface NodeColorPair {
+  /** Stable identifier, also used as the swatch's accessible name. */
+  id: string
+  /** Node background/fill color. */
+  background: string
+  /** Label text color paired with {@link background}. */
+  text: string
+}
+
+/**
+ * The canvas node palette — dark, tinted surfaces with a vivid paired text color
+ * that suits the dark technical workspace. Kept here (rather than in global.css)
+ * because these pairs exist only for canvas nodes and have no theme tokens yet.
+ */
+export const NODE_COLORS: NodeColorPair[] = [
+  { id: "slate", background: "#1E293B", text: "#E2E8F0" },
+  { id: "sky", background: "#0F2A3F", text: "#7DD3FC" },
+  { id: "emerald", background: "#0F2E22", text: "#6EE7B7" },
+  { id: "amber", background: "#33270A", text: "#FCD34D" },
+  { id: "rose", background: "#3A1220", text: "#FDA4AF" },
+  { id: "violet", background: "#241A3A", text: "#C4B5FD" },
+]
+
+/** Color pair applied to freshly dropped nodes. */
+export const DEFAULT_NODE_COLOR_PAIR = NODE_COLORS[0]
 
 /** MIME-ish key used to carry a shape across a drag-and-drop onto the canvas. */
 export const SHAPE_DRAG_TYPE = "application/ghost-shape"
