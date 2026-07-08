@@ -1,6 +1,7 @@
 "use client"
 
 import {
+  LayoutTemplate,
   PanelLeftClose,
   PanelLeftOpen,
   PanelRightClose,
@@ -17,6 +18,8 @@ interface WorkspaceNavbarProps {
   isAiOpen: boolean
   onToggleAi: () => void
   onShare: () => void
+  /** Opens the starter-templates import modal. */
+  onOpenTemplates: () => void
 }
 
 export function WorkspaceNavbar({
@@ -26,6 +29,7 @@ export function WorkspaceNavbar({
   isAiOpen,
   onToggleAi,
   onShare,
+  onOpenTemplates,
 }: WorkspaceNavbarProps) {
   return (
     <nav className="flex h-12 w-full shrink-0 items-center justify-between gap-2 border-b border-border bg-background px-3">
@@ -44,6 +48,10 @@ export function WorkspaceNavbar({
       </div>
 
       <div className="flex shrink-0 items-center gap-1">
+        <Button variant="outline" size="sm" onClick={onOpenTemplates}>
+          <LayoutTemplate />
+          Templates
+        </Button>
         <Button variant="outline" size="sm" onClick={onShare}>
           <Share2 />
           Share

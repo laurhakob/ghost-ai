@@ -1,4 +1,4 @@
-import type { Edge, Node } from "@xyflow/react"
+import { MarkerType, type Edge, type Node } from "@xyflow/react"
 
 /**
  * Shapes a canvas node can render as. Shape-specific visuals are added later;
@@ -78,8 +78,29 @@ export const CANVAS_NODE_TYPE = "canvasNode" as const
 /** The single custom edge type used on the canvas. */
 export const CANVAS_EDGE_TYPE = "canvasEdge" as const
 
+/**
+ * Data carried by every canvas edge. The index signature keeps it assignable to
+ * React Flow's `Record<string, unknown>` data constraint.
+ */
+export interface CanvasEdgeData {
+  /** Optional inline label shown as a pill badge at the edge midpoint. */
+  label?: string
+  [key: string]: unknown
+}
+
+/** Stroke color shared by the edge line, connection preview, and arrowhead. */
+export const EDGE_STROKE_COLOR = "#94a3b8"
+
+/** Arrowhead drawn at the end of every canvas edge (new connections + templates). */
+export const DEFAULT_EDGE_MARKER = {
+  type: MarkerType.ArrowClosed,
+  width: 18,
+  height: 18,
+  color: EDGE_STROKE_COLOR,
+} as const
+
 /** A React Flow node backed by {@link CanvasNodeData}. */
 export type CanvasNode = Node<CanvasNodeData, typeof CANVAS_NODE_TYPE>
 
-/** A React Flow edge on the canvas. */
-export type CanvasEdge = Edge<Record<string, unknown>, typeof CANVAS_EDGE_TYPE>
+/** A React Flow edge backed by {@link CanvasEdgeData}. */
+export type CanvasEdge = Edge<CanvasEdgeData, typeof CANVAS_EDGE_TYPE>

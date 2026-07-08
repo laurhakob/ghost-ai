@@ -27,6 +27,7 @@ export function WorkspaceShell({
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [isAiOpen, setIsAiOpen] = useState(false)
   const [isShareOpen, setIsShareOpen] = useState(false)
+  const [isTemplatesOpen, setIsTemplatesOpen] = useState(false)
   const actions = useProjectActions()
 
   return (
@@ -38,6 +39,7 @@ export function WorkspaceShell({
         isAiOpen={isAiOpen}
         onToggleAi={() => setIsAiOpen((open) => !open)}
         onShare={() => setIsShareOpen(true)}
+        onOpenTemplates={() => setIsTemplatesOpen(true)}
       />
 
       <div className="relative flex-1 overflow-hidden">
@@ -55,7 +57,11 @@ export function WorkspaceShell({
         <div className="flex h-full">
           {/* Collaborative canvas — fills the remaining space. */}
           <main className="relative flex-1 overflow-hidden bg-neutral-950">
-            <Canvas roomId={project.id} />
+            <Canvas
+              roomId={project.id}
+              templatesOpen={isTemplatesOpen}
+              onTemplatesOpenChange={setIsTemplatesOpen}
+            />
           </main>
 
           {/* Right sidebar placeholder for the future AI chat. */}

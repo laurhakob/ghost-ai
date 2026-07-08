@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useRef, useState, type CSSProperties } from "react"
 
 import {
   Handle,
@@ -37,7 +37,19 @@ export function CanvasNodeRenderer({ id, data, selected }: NodeProps<CanvasNode>
   const { updateNodeData } = useReactFlow<CanvasNode>()
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(data.label)
+  const [hovered, setHovered] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  // Handles stay hidden until the node is hovered, then fade in. They remain
+  // connectable while invisible, so nothing changes about connection behavior.
+  const handleStyle: CSSProperties = {
+    width: 8,
+    height: 8,
+    background: "#ffffff",
+    border: "1px solid #0a0a0a",
+    opacity: hovered ? 1 : 0,
+    transition: "opacity 120ms ease",
+  }
 
   // Mirror remote label edits into the draft whenever we're not actively editing.
   useEffect(() => {
@@ -79,7 +91,11 @@ export function CanvasNodeRenderer({ id, data, selected }: NodeProps<CanvasNode>
   }
 
   return (
-    <div className="relative h-full w-full">
+    <div
+      className="relative h-full w-full"
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
       <NodeColorToolbar
         nodeId={id}
         isVisible={selected}
@@ -95,10 +111,10 @@ export function CanvasNodeRenderer({ id, data, selected }: NodeProps<CanvasNode>
         lineStyle={{ borderColor: "rgba(82, 82, 82, 0.6)" }}
       />
 
-      <Handle type="source" position={Position.Top} id="top" />
-      <Handle type="source" position={Position.Right} id="right" />
-      <Handle type="source" position={Position.Bottom} id="bottom" />
-      <Handle type="source" position={Position.Left} id="left" />
+      <Handle type="source" position={Position.Top} id="top" style={handleStyle} />
+      <Handle type="source" position={Position.Right} id="right" style={handleStyle} />
+      <Handle type="source" position={Position.Bottom} id="bottom" style={handleStyle} />
+      <Handle type="source" position={Position.Left} id="left" style={handleStyle} />
 
       {/* The shape draws the label itself when idle; hide it while editing so the
           textarea sits alone in the same centered spot (no layout shift). */}

@@ -9,7 +9,7 @@ change.
 
 ## Current Goal
 
-- Feature spec 03 - Auth
+- Feature spec 18 - Starter templates
 
 ## Completed
 
@@ -203,13 +203,92 @@ change.
   selection, or full color-picker changes (out of scope). `npm run build`
   passes.
 
+- Feature spec 16 (edge behavior): custom canvas edges with connection handles
+  and inline labels. types/canvas.ts gained CanvasEdgeData ({ label?: string } +
+  index signature); CanvasEdge is now Edge<CanvasEdgeData, typeof
+  CANVAS_EDGE_TYPE>. canvas-node.tsx: the four source Handles (top/right/bottom/
+  left, ConnectionMode.Loose already allows any-handle→any-handle) now render as
+  subtle 8px white dots with a dark border (#0a0a0a), opacity 0 at rest and
+  fading to 1 on node hover (node wrapper tracks `hovered`; handles stay
+  connectable while invisible). New components/editor/canvas-edge.tsx
+  (CanvasEdgeRenderer): right-angle routing via getSmoothStepPath (borderRadius
+  8), BaseEdge with a light #94a3b8 round-capped 2px stroke that is dimmed
+  (opacity 0.45) at rest and full when hovered/selected (`active`), wide invisible
+  interaction band from BaseEdge's default interactionWidth so it's easy to
+  hover/click without thickening the line. Double-click (on the edge <g> or the
+  label) opens an inline editor positioned via EdgeLabelRenderer at the
+  getSmoothStepPath labelX/labelY (no manual midpoint math); input grows with
+  text (width `${max(len,1)}ch`), saves on blur/Enter/Escape (Enter+Escape blur →
+  commit) through useReactFlow().updateEdgeData(id,{label}) → onEdgesChange →
+  Liveblocks sync; a useEffect mirrors remote label edits into the draft when not
+  editing. Saved labels show as pill badges; an active edge with no label shows a
+  faint "Double-click to label" hint. nodrag/nopan + onPointerDown
+  stopPropagation keep label interaction from panning/dragging. canvas.tsx:
+  edgeTypes = { canvasEdge: CanvasEdgeRenderer } + defaultEdgeOptions ({ type:
+  canvasEdge, markerEnd: ArrowClosed #94a3b8 }) + connectionLineType SmoothStep +
+  round-capped connectionLineStyle. Because Liveblocks' built-in onConnect calls
+  addEdge(connection, []) and ignores defaultEdgeOptions, replaced it with a local
+  onConnect that builds the edge (addEdge to generate id) then stamps type +
+  markerEnd + data.label:"" and dispatches via onEdgesChange add (synced). No
+  node-creation/shape-panel/node-renderer changes beyond the handle styling (out
+  of scope). `npm run build` passes.
+
+- Feature spec 17 (canvas ergonomics): floating control bar + keyboard shortcuts
+  for zoom and undo/redo. New components/editor/canvas-controls.tsx
+  (CanvasControls): pill-shaped bar at bottom-6 left-6 (z-10, above the shape
+  panel), pointer-events-none wrapper / pointer-events-auto pill matching the
+  shape-panel style, two groups split by a thin w-px divider — zoom (zoom out
+  Minus / fit view Maximize / zoom in Plus) driving useReactFlow().zoomOut/
+  fitView/zoomIn with { duration: 200 } for a smooth animation, and history
+  (Undo2/Redo2) wired to Liveblocks useUndo()/useRedo(); buttons disable via
+  useCanUndo()/useCanRedo() and dim to opacity-30 + cursor-not-allowed when
+  disabled. New hooks/use-keyboard-shortcuts.ts (useKeyboardShortcuts, exports
+  ZOOM_ANIMATION_DURATION=200): takes { reactFlow (Pick zoomIn/zoomOut), onUndo,
+  onRedo }, binds a window keydown listener, and ignores events whose target is
+  an INPUT/TEXTAREA/contentEditable (so node/edge label editors are unaffected).
+  Shortcuts: `+`/`=` zoom in, `-` zoom out (no modifier); Cmd/Ctrl+Z undo,
+  Cmd/Ctrl+Shift+Z & Cmd/Ctrl+Y redo. canvas.tsx FlowCanvasInner now grabs the
+  full reactFlow instance, calls useUndo/useRedo, wires useKeyboardShortcuts, and
+  renders <CanvasControls/> alongside <ShapePanel/>. No shape-panel, node/edge
+  renderer, extra-controls, or collaborative-state changes (out of scope). `npm
+  run build` passes.
+
+- Feature spec 18 (starter templates): import a pre-built diagram to replace the
+  canvas. types/canvas.ts gained shared edge constants EDGE_STROKE_COLOR
+  (#94a3b8) + DEFAULT_EDGE_MARKER (ArrowClosed 18x18); canvas.tsx now imports
+  these instead of its old local EDGE_STROKE/EDGE_MARKER_END (same values, no
+  behavior change) so template edges and user edges share one arrowhead source.
+  components/editor/starter-templates.ts: CanvasTemplate type ({ id, name,
+  description, nodes: CanvasNode[], edges: CanvasEdge[] }) + CANVAS_TEMPLATES
+  (three — Microservices, CI/CD Pipeline, Event-Driven System) built with
+  node()/edge() helpers + a per-shape SHAPE_SIZE map (mirrors shape-panel drop
+  sizes) and a palette() lookup into NODE_COLORS, so templates use the shared
+  types + existing palette. components/editor/template-preview.tsx: lightweight
+  static preview (no React Flow) — derives content bounds from node positions/
+  sizes, scales to fit a fixed 260x120 viewport (0.85 padding) + centers, draws
+  edges as <line>s between node centers and nodes via reused <CanvasShape>.
+  components/editor/starter-templates-modal.tsx: shadcn Dialog with a scrollable
+  (ScrollArea, max-h-60vh) responsive grid of cards (preview + name +
+  description + full-width Import button); Import calls onImport(template).
+  Wiring: WorkspaceShell owns isTemplatesOpen; WorkspaceNavbar gained an
+  onOpenTemplates prop + a "Templates" outline button (LayoutTemplate icon)
+  beside Share. Canvas takes templatesOpen + onTemplatesOpenChange, threaded
+  through FlowCanvas → FlowCanvasInner, which renders <StarterTemplatesModal> and
+  implements onImportTemplate: builds NodeChange/EdgeChange arrays that remove
+  every existing node/edge then add structuredClone'd template items (so repeat
+  imports don't share refs), dispatches via the synced onNodesChange/
+  onEdgesChange, closes the modal, and fitView({duration:200}) after a 50ms tick
+  so the swap stays inside the collaborative Liveblocks state. No template
+  saving/custom templates/server persistence, and no node/edge rendering changes
+  (out of scope). `npm run build` passes.
+
 ## In Progress
 
 - None
 
 ## Next Up
 
-- Feature specs 16+
+- Feature specs 19+
 
 ## Open Questions
 
