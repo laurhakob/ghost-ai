@@ -9,7 +9,7 @@ change.
 
 ## Current Goal
 
-- Feature spec 18 - Starter templates
+- Feature spec 19 - Presence avatars & live cursors
 
 ## Completed
 
@@ -265,11 +265,15 @@ change.
   sizes) and a palette() lookup into NODE_COLORS, so templates use the shared
   types + existing palette. components/editor/template-preview.tsx: lightweight
   static preview (no React Flow) — derives content bounds from node positions/
-  sizes, scales to fit a fixed 260x120 viewport (0.85 padding) + centers, draws
-  edges as <line>s between node centers and nodes via reused <CanvasShape>.
-  components/editor/starter-templates-modal.tsx: shadcn Dialog with a scrollable
-  (ScrollArea, max-h-60vh) responsive grid of cards (preview + name +
-  description + full-width Import button); Import calls onImport(template).
+  sizes, scales to fit a 340x190 logical viewport (0.82 padding) + centers, then
+  renders responsively (w-full at that aspect ratio, nodes positioned by
+  percentage) so previews fill the card and stay large/legible; draws edges as
+  <line>s between node centers (SVG viewBox) and nodes via reused <CanvasShape>.
+  components/editor/starter-templates-modal.tsx: shadcn Dialog (sm:max-w-6xl)
+  with a scrollable (ScrollArea, max-h-70vh) responsive grid of cards
+  (1/2/3 cols at base/sm/lg, so all three templates sit in one row on a wide
+  screen) — large preview + name + description + full-width Import button; Import
+  calls onImport(template).
   Wiring: WorkspaceShell owns isTemplatesOpen; WorkspaceNavbar gained an
   onOpenTemplates prop + a "Templates" outline button (LayoutTemplate icon)
   beside Share. Canvas takes templatesOpen + onTemplatesOpenChange, threaded
@@ -282,13 +286,40 @@ change.
   saving/custom templates/server persistence, and no node/edge rendering changes
   (out of scope). `npm run build` passes.
 
+- Feature spec 19 (presence avatars & cursors): active-room participants shown
+  inside the editor canvas view only; the editor home navbar and shared
+  workspace navbar are untouched. liveblocks.config.ts Presence tightened to the
+  spec — cursor {x,y}|null plus a required `thinking: boolean` (was optional
+  isThinking); canvas.tsx RoomProvider initialPresence now { cursor: null,
+  thinking: false }. components/editor/presence-avatars.tsx (PresenceAvatars):
+  absolute top-right (right-4 top-4, z-30) group, pointer-events-none wrapper so
+  it never blocks the canvas; current user's Clerk ID from useUser() filters
+  useOthers() (other.id !== user.id) to exclude their own duplicate sessions.
+  Collaborators render as an overlapping stack (-space-x-2) of display-only
+  CollaboratorAvatars (h-8 w-8, profile photo via <img>, initials fallback via
+  getInitials, ring-2 ring-neutral-900), up to MAX_VISIBLE=5 then a +N
+  OverflowChip. A w-px divider shows only when ≥1 collaborator; the current user
+  is the existing Clerk <UserButton> (userButtonAvatarBox h-8 w-8, matching size,
+  pointer-events-auto) — never drawn from presence. components/editor/live-
+  cursors.tsx (LiveCursors): renders other participants' cursors only (skips
+  self by Clerk id + null cursor); cursor stored in presence in canvas (flow)
+  coords so it stays anchored per-viewer, rendered via flowToScreenPosition
+  minus the canvas container rect, re-running on useViewport() pan/zoom; small
+  colored SVG pointer + name badge tinted to the participant's presence color.
+  canvas.tsx wiring: dropped the built-in @liveblocks/react-flow <Cursors/>;
+  FlowCanvasInner gains a containerRef on the wrapper, useUpdateMyPresence, and
+  ReactFlow onMouseMove (screenToFlowPosition → updateMyPresence cursor) /
+  onMouseLeave (cursor null); renders <LiveCursors containerRef>/<PresenceAvatars/>.
+  No navbar, node/edge, or Clerk profile-behavior changes (out of scope). `npm
+  run build` passes.
+
 ## In Progress
 
 - None
 
 ## Next Up
 
-- Feature specs 19+
+- Feature specs 20+
 
 ## Open Questions
 

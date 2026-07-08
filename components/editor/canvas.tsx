@@ -19,18 +19,21 @@ import {
   type NodeChange,
   type NodeTypes,
 } from "@xyflow/react"
-import { Cursors, useLiveblocksFlow } from "@liveblocks/react-flow"
+import { useLiveblocksFlow } from "@liveblocks/react-flow"
 import {
   ClientSideSuspense,
   LiveblocksProvider,
   RoomProvider,
   useRedo,
   useUndo,
+  useUpdateMyPresence,
 } from "@liveblocks/react/suspense"
 
 import { CanvasControls } from "@/components/editor/canvas-controls"
 import { CanvasEdgeRenderer } from "@/components/editor/canvas-edge"
 import { CanvasNodeRenderer } from "@/components/editor/canvas-node"
+import { LiveCursors } from "@/components/editor/live-cursors"
+import { PresenceAvatars } from "@/components/editor/presence-avatars"
 import { ShapePanel } from "@/components/editor/shape-panel"
 import { StarterTemplatesModal } from "@/components/editor/starter-templates-modal"
 import type { CanvasTemplate } from "@/components/editor/starter-templates"
@@ -89,7 +92,7 @@ interface CanvasProps {
 export function Canvas({ roomId, templatesOpen, onTemplatesOpenChange }: CanvasProps) {
   return (
     <LiveblocksProvider authEndpoint="/api/liveblocks-auth">
-      <RoomProvider id={roomId} initialPresence={{ cursor: null }}>
+      <RoomProvider id={roomId} initialPresence={{ cursor: null, thinking: false }}>
         <CanvasErrorBoundary>
           <ClientSideSuspense fallback={<CanvasLoading />}>
             <FlowCanvas
@@ -140,6 +143,25 @@ function FlowCanvasInner({ templatesOpen, onTemplatesOpenChange }: FlowCanvasPro
   const { screenToFlowPosition } = reactFlow
   // Disambiguates nodes created within the same millisecond.
   const counterRef = useRef(0)
+  // The canvas container, used to offset live-cursor overlay positions.
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  // Broadcast this user's cursor position (in canvas coordinates) so it stays
+  // anchored to the diagram for everyone else, regardless of their own view.
+  const updateMyPresence = useUpdateMyPresence()
+  const onMouseMove = useCallback(
+    (event: React.MouseEvent) => {
+      const point = screenToFlowPosition({
+        x: event.clientX,
+        y: event.clientY,
+      })
+      updateMyPresence({ cursor: { x: point.x, y: point.y } })
+    },
+    [screenToFlowPosition, updateMyPresence],
+  )
+  const onMouseLeave = useCallback(() => {
+    updateMyPresence({ cursor: null })
+  }, [updateMyPresence])
 
   // Liveblocks history, wired to both the control bar and keyboard shortcuts.
   const undo = useUndo()
@@ -249,6 +271,7 @@ function FlowCanvasInner({ templatesOpen, onTemplatesOpenChange }: FlowCanvasPro
 
   return (
     <div
+      ref={containerRef}
       className="relative h-full w-full bg-neutral-950"
       onDragOver={onDragOver}
       onDrop={onDrop}
@@ -265,15 +288,19 @@ function FlowCanvasInner({ templatesOpen, onTemplatesOpenChange }: FlowCanvasPro
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
         onDelete={onDelete}
+        onMouseMove={onMouseMove}
+        onMouseLeave={onMouseLeave}
         connectionMode={ConnectionMode.Loose}
         fitView
         colorMode="dark"
         proOptions={{ hideAttribution: true }}
       >
-        <Cursors />
         <MiniMap />
         <Background variant={BackgroundVariant.Dots} gap={16} size={1} />
       </ReactFlow>
+
+      <LiveCursors containerRef={containerRef} />
+      <PresenceAvatars />
 
       <CanvasControls />
       <ShapePanel />

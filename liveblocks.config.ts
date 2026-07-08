@@ -6,9 +6,8 @@ declare global {
     Presence: {
       // Live cursor position on the canvas, or null when off-canvas.
       cursor: { x: number; y: number } | null;
-      // Whether this user is currently prompting the AI assistant. Optional
-      // until the AI feature sets it; canvas presence only needs `cursor`.
-      isThinking?: boolean;
+      // Whether this user is currently prompting the AI assistant.
+      thinking: boolean;
     };
 
     // The Storage tree for the room, for useMutation, useStorage, etc.

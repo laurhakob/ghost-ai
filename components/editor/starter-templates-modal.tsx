@@ -34,7 +34,7 @@ export function StarterTemplatesModal({
 }: StarterTemplatesModalProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl">
+      <DialogContent className="sm:max-w-6xl">
         <DialogHeader>
           <DialogTitle>Start from a template</DialogTitle>
           <DialogDescription>
@@ -43,12 +43,12 @@ export function StarterTemplatesModal({
           </DialogDescription>
         </DialogHeader>
 
-        <ScrollArea className="max-h-[60vh] -mx-1 px-1">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <ScrollArea className="max-h-[70vh] -mx-1 px-1">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {CANVAS_TEMPLATES.map((template) => (
               <div
                 key={template.id}
-                className="flex flex-col gap-3 rounded-xl border border-border bg-muted/30 p-3"
+                className="flex flex-col gap-3 rounded-xl border border-border bg-muted/30 p-4"
               >
                 <TemplatePreview template={template} />
 
