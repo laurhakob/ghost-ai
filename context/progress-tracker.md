@@ -138,13 +138,34 @@ change.
   DEFAULT_NODE_COLOR, SHAPE_DRAG_TYPE, and ShapeDragPayload. No shape-specific
   visuals yet (all render as rectangles). `npm run build` passes.
 
+- Feature spec 13 (node shape rendering + drag preview): replaced the
+  placeholder rectangle renderer with real shape variants and a ghost drag
+  preview. New components/editor/canvas-shape.tsx exports CanvasShape({ shape,
+  color, selected?, label? }) — the single source of truth for drawing a shape,
+  shared by the node renderer and the drag preview. Rectangle/pill/circle are
+  CSS boxes (border-radius: rectangle 0.5rem, pill+circle 9999px); diamond/
+  hexagon/cylinder are SVGs on a 0 0 100 100 viewBox with
+  preserveAspectRatio="none" so they stretch to any node size, and
+  vectorEffect="non-scaling-stroke" so the border stays uniform (cylinder =
+  body-fill path + sides/bottom-rim path + top-rim ellipse). Fill is
+  neutral-900/80; border is subtle at rest (color at 50% alpha via withAlpha,
+  2px) and brightens when selected (full color, 2.5px, + drop-shadow glow).
+  canvas-node.tsx now reads NodeProps.selected and renders CanvasShape (Handles
+  unchanged, still all four sides). shape-panel.tsx adds off-screen ghost
+  elements (one CanvasShape per shape at its drop width/height, fixed at
+  left:-9999px); handleDragStart calls dataTransfer.setDragImage(ghost,
+  width/2, height/2) so the cursor carries a shape preview centered under it —
+  browser hides it automatically on drop/cancel. No resize/label-editing, no
+  shape-panel layout or drop-handler changes (out of scope). `npm run build`
+  passes.
+
 ## In Progress
 
 - None
 
 ## Next Up
 
-- Feature specs 13+
+- Feature specs 14+
 
 ## Open Questions
 
