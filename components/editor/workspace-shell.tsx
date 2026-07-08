@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 
+import { Canvas } from "@/components/editor/canvas"
 import { ProjectDialogs } from "@/components/editor/project-dialogs"
 import { ProjectSidebar } from "@/components/editor/project-sidebar"
 import { ShareDialog } from "@/components/editor/share-dialog"
@@ -52,11 +53,9 @@ export function WorkspaceShell({
         />
 
         <div className="flex h-full">
-          {/* Canvas placeholder — fills the remaining space. */}
-          <main className="flex flex-1 items-center justify-center bg-neutral-950">
-            <p className="text-sm text-neutral-500">
-              Canvas for &ldquo;{project.name}&rdquo; coming soon
-            </p>
+          {/* Collaborative canvas — fills the remaining space. */}
+          <main className="relative flex-1 overflow-hidden bg-neutral-950">
+            <Canvas roomId={project.id} />
           </main>
 
           {/* Right sidebar placeholder for the future AI chat. */}

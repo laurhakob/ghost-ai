@@ -78,13 +78,73 @@ change.
   local user table added. `npm run build` passes; collaborators route
   registered.
 
+- Feature spec 10 (Liveblocks setup): realtime infra configured. liveblocks
+  .config.ts types Presence (cursor: {x,y}|null, isThinking) and UserMeta (id +
+  info{ name, avatar, color }). lib/liveblocks.ts holds a lazily-created cached
+  node client (getLiveblocks() — lazy because the Liveblocks constructor
+  validates the secret eagerly, which broke build page-data collection) plus
+  getUserColor() mapping a user ID deterministically into a fixed 10-color
+  palette. app/api/liveblocks-auth/route.ts (POST): Clerk auth (401), reads the
+  room from the body (room ID = project ID), verifies access via
+  getAccessibleProject (403 when denied), getOrCreateRoom({defaultAccesses:[]})
+  to ensure the room exists, then prepareSession with userInfo {name (Clerk
+  fullName → email → "Anonymous"), avatar (Clerk imageUrl), color} and
+  FULL_ACCESS to that room. NOTE: @liveblocks/node was NOT actually installed
+  (spec claim was wrong) — installed @^3.22.0 to match the other liveblocks
+  packages. LIVEBLOCKS_SECRET_KEY added (empty) to .env.local — must be filled
+  from the Liveblocks dashboard before the auth route works at runtime. No
+  client Room provider wired yet. `npm run build` passes.
+
+- Feature spec 11 (base canvas): replaced the workspace canvas placeholder with
+  a Liveblocks-backed React Flow canvas. components/editor/canvas.tsx (client):
+  Canvas wrapper sets up LiveblocksProvider (authEndpoint /api/liveblocks-auth) +
+  RoomProvider (id = project.id, initialPresence { cursor: null }) wrapped in a
+  local CanvasErrorBoundary (class component — Liveblocks/react-error-boundary
+  export none) and ClientSideSuspense (Loading canvas… fallback). Inner
+  FlowCanvas uses useLiveblocksFlow<CanvasNode, CanvasEdge>({ suspense: true,
+  nodes/edges initial: [] }) and feeds synced nodes/edges + onNodesChange/
+  onEdgesChange/onConnect/onDelete into ReactFlow with ConnectionMode.Loose,
+  fitView, colorMode dark, hideAttribution, plus <Cursors/>, <MiniMap/>, and a
+  dots <Background/>. CSS: @xyflow/react + @liveblocks/react-flow styles imported.
+  types/canvas.ts holds CanvasNodeData (label, color, shape + index signature),
+  CanvasNodeShape, CANVAS_NODE_TYPE "canvasNode" / CANVAS_EDGE_TYPE "canvasEdge",
+  and CanvasNode/CanvasEdge. workspace-shell.tsx renders <Canvas roomId=
+  {project.id}/> in place of the placeholder. NOTE: made Presence.isThinking
+  optional in liveblocks.config.ts so initial presence can be { cursor: null }
+  per spec (isThinking is an unused AI-feature field until later). No controls,
+  custom node/edge rendering, persistence, or AI yet (out of scope). `npm run
+  build` passes. (Machine note: C: was 100% full mid-task — cleared npm cache to
+  free ~16 GB before the build could run.)
+
+- Feature spec 12 (shape panel): drag shapes onto the canvas to create nodes.
+  components/editor/shape-panel.tsx — floating pill toolbar at bottom-center
+  (absolute, pointer-events-none wrapper / pointer-events-auto pill), six
+  draggable icon buttons (rectangle=RectangleHorizontal 160x90, diamond 140x140,
+  circle 110x110, pill 160x64, cylinder 120x140, hexagon 150x120 — rects wider
+  than tall, circle square, diamond slightly larger). onDragStart writes a
+  ShapeDragPayload { shape, width, height } to dataTransfer under SHAPE_DRAG_TYPE
+  ("application/ghost-shape"). components/editor/canvas-node.tsx —
+  CanvasNodeRenderer: basic bordered rectangle filling the node box, label
+  centered, borderColor from data.color, four source Handles (all shapes render
+  the same for now). canvas.tsx: FlowCanvas now wraps FlowCanvasInner in
+  ReactFlowProvider so useReactFlow().screenToFlowPosition works; wrapper div
+  gets onDragOver (dropEffect move) + onDrop. onDrop parses the payload,
+  converts screen→canvas coords (centered under cursor), builds a CanvasNode
+  (id = `${shape}-${Date.now()}-${counter++}` via counterRef, type canvasNode,
+  width/height + matching style, data { label:"", color: DEFAULT_NODE_COLOR
+  #64B5F6, shape }) and applies it via onNodesChange([{ type:"add", item }]).
+  nodeTypes = { canvasNode: CanvasNodeRenderer } at module scope; passed to
+  ReactFlow. types/canvas.ts gained the six-shape CanvasNodeShape union,
+  DEFAULT_NODE_COLOR, SHAPE_DRAG_TYPE, and ShapeDragPayload. No shape-specific
+  visuals yet (all render as rectangles). `npm run build` passes.
+
 ## In Progress
 
 - None
 
 ## Next Up
 
-- Feature specs 10+
+- Feature specs 13+
 
 ## Open Questions
 
