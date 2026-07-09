@@ -2,6 +2,11 @@
 
 import { useState } from "react"
 
+import {
+  LiveblocksProvider,
+  RoomProvider,
+} from "@liveblocks/react/suspense"
+
 import { AiSidebar } from "@/components/editor/ai-sidebar"
 import { Canvas } from "@/components/editor/canvas"
 import { ProjectDialogs } from "@/components/editor/project-dialogs"
@@ -11,6 +16,7 @@ import { WorkspaceNavbar } from "@/components/editor/workspace-navbar"
 import { type SaveStatus } from "@/hooks/use-canvas-autosave"
 import { useProjectActions } from "@/hooks/use-project-actions"
 import { type Project } from "@/lib/projects"
+import { type AiStatusMessage } from "@/types/tasks"
 
 interface WorkspaceShellProps {
   /** The project whose workspace is being viewed. */
@@ -31,6 +37,12 @@ export function WorkspaceShell({
   const [isShareOpen, setIsShareOpen] = useState(false)
   const [isTemplatesOpen, setIsTemplatesOpen] = useState(false)
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle")
+  // Latest shared AI status message (from the `ai-status-feed`), surfaced in the
+  // AI sidebar so the whole room sees when the AI is working.
+  const [aiStatus, setAiStatus] = useState<AiStatusMessage | null>(null)
+  // Whether the local user is currently prompting the AI. Published to their
+  // Liveblocks presence via the canvas so others see a spinner on their cursor.
+  const [isThinking, setIsThinking] = useState(false)
   const actions = useProjectActions()
 
   return (
@@ -46,31 +58,48 @@ export function WorkspaceShell({
         saveStatus={saveStatus}
       />
 
-      <div className="relative flex-1 overflow-hidden">
-        <ProjectSidebar
-          isOpen={isSidebarOpen}
-          onClose={() => setIsSidebarOpen(false)}
-          projects={projects}
-          sharedProjects={sharedProjects}
-          currentProjectId={project.id}
-          onCreateProject={actions.openCreate}
-          onRenameProject={actions.openRename}
-          onDeleteProject={actions.openDelete}
-        />
+      {/* One Liveblocks room shared by the canvas and the AI sidebar, so both
+          can subscribe to presence and the room's Storage feeds. */}
+      <LiveblocksProvider authEndpoint="/api/liveblocks-auth">
+        <RoomProvider
+          id={project.id}
+          initialPresence={{ cursor: null, thinking: false }}
+        >
+          <div className="relative flex-1 overflow-hidden">
+            <ProjectSidebar
+              isOpen={isSidebarOpen}
+              onClose={() => setIsSidebarOpen(false)}
+              projects={projects}
+              sharedProjects={sharedProjects}
+              currentProjectId={project.id}
+              onCreateProject={actions.openCreate}
+              onRenameProject={actions.openRename}
+              onDeleteProject={actions.openDelete}
+            />
 
-        {/* Collaborative canvas — fills the remaining space. */}
-        <main className="relative h-full overflow-hidden bg-neutral-950">
-          <Canvas
-            roomId={project.id}
-            templatesOpen={isTemplatesOpen}
-            onTemplatesOpenChange={setIsTemplatesOpen}
-            onSaveStatusChange={setSaveStatus}
-          />
-        </main>
+            {/* Collaborative canvas — fills the remaining space. */}
+            <main className="relative h-full overflow-hidden bg-neutral-950">
+              <Canvas
+                roomId={project.id}
+                templatesOpen={isTemplatesOpen}
+                onTemplatesOpenChange={setIsTemplatesOpen}
+                onSaveStatusChange={setSaveStatus}
+                onAiStatusChange={setAiStatus}
+                thinking={isThinking}
+              />
+            </main>
 
-        {/* Floating AI chat sidebar — slides in from the right. */}
-        <AiSidebar isOpen={isAiOpen} onClose={() => setIsAiOpen(false)} />
-      </div>
+            {/* Floating AI chat sidebar — slides in from the right. */}
+            <AiSidebar
+              isOpen={isAiOpen}
+              onClose={() => setIsAiOpen(false)}
+              projectId={project.id}
+              aiStatus={aiStatus}
+              onThinkingChange={setIsThinking}
+            />
+          </div>
+        </RoomProvider>
+      </LiveblocksProvider>
 
       <ProjectDialogs actions={actions} />
 

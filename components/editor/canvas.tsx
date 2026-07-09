@@ -29,13 +29,13 @@ import {
 import { useLiveblocksFlow } from "@liveblocks/react-flow"
 import {
   ClientSideSuspense,
-  LiveblocksProvider,
-  RoomProvider,
   useRedo,
+  useStorage,
   useUndo,
   useUpdateMyPresence,
 } from "@liveblocks/react/suspense"
 
+import { AiPresence } from "@/components/editor/ai-presence"
 import { CanvasControls } from "@/components/editor/canvas-controls"
 import { CanvasEdgeRenderer } from "@/components/editor/canvas-edge"
 import { CanvasNodeRenderer } from "@/components/editor/canvas-node"
@@ -46,6 +46,11 @@ import { StarterTemplatesModal } from "@/components/editor/starter-templates-mod
 import type { CanvasTemplate } from "@/components/editor/starter-templates"
 import { useCanvasAutosave, type SaveStatus } from "@/hooks/use-canvas-autosave"
 import { useKeyboardShortcuts, ZOOM_ANIMATION_DURATION } from "@/hooks/use-keyboard-shortcuts"
+import {
+  AI_STATUS_FEED_KEY,
+  parseAiStatusMessage,
+  type AiStatusMessage,
+} from "@/types/tasks"
 import {
   CANVAS_EDGE_TYPE,
   CANVAS_NODE_TYPE,
@@ -93,33 +98,42 @@ interface CanvasProps {
   onTemplatesOpenChange: (open: boolean) => void
   /** Reports the autosave status up to the workspace navbar. */
   onSaveStatusChange?: (status: SaveStatus) => void
+  /** Reports the latest shared AI status message up to the workspace shell. */
+  onAiStatusChange?: (status: AiStatusMessage | null) => void
+  /**
+   * Whether the local user is currently prompting the AI. Published to their
+   * Liveblocks presence so other participants see a spinner on their cursor.
+   */
+  thinking?: boolean
 }
 
 /**
- * Client-side canvas wrapper. Establishes the Liveblocks room for the given
- * project and renders the collaborative React Flow canvas inside it.
+ * Client-side canvas. Renders the collaborative React Flow canvas for the
+ * current project. The Liveblocks room itself is established one level up (in
+ * the workspace shell) so the AI sidebar shares the same room — here we only
+ * suspend on the room's storage and guard against connection failures.
  */
 export function Canvas({
   roomId,
   templatesOpen,
   onTemplatesOpenChange,
   onSaveStatusChange,
+  onAiStatusChange,
+  thinking = false,
 }: CanvasProps) {
   return (
-    <LiveblocksProvider authEndpoint="/api/liveblocks-auth">
-      <RoomProvider id={roomId} initialPresence={{ cursor: null, thinking: false }}>
-        <CanvasErrorBoundary>
-          <ClientSideSuspense fallback={<CanvasLoading />}>
-            <FlowCanvas
-              projectId={roomId}
-              templatesOpen={templatesOpen}
-              onTemplatesOpenChange={onTemplatesOpenChange}
-              onSaveStatusChange={onSaveStatusChange}
-            />
-          </ClientSideSuspense>
-        </CanvasErrorBoundary>
-      </RoomProvider>
-    </LiveblocksProvider>
+    <CanvasErrorBoundary>
+      <ClientSideSuspense fallback={<CanvasLoading />}>
+        <FlowCanvas
+          projectId={roomId}
+          templatesOpen={templatesOpen}
+          onTemplatesOpenChange={onTemplatesOpenChange}
+          onSaveStatusChange={onSaveStatusChange}
+          onAiStatusChange={onAiStatusChange}
+          thinking={thinking}
+        />
+      </ClientSideSuspense>
+    </CanvasErrorBoundary>
   )
 }
 
@@ -128,6 +142,8 @@ interface FlowCanvasProps {
   templatesOpen: boolean
   onTemplatesOpenChange: (open: boolean) => void
   onSaveStatusChange?: (status: SaveStatus) => void
+  onAiStatusChange?: (status: AiStatusMessage | null) => void
+  thinking: boolean
 }
 
 /**
@@ -139,6 +155,8 @@ function FlowCanvas({
   templatesOpen,
   onTemplatesOpenChange,
   onSaveStatusChange,
+  onAiStatusChange,
+  thinking,
 }: FlowCanvasProps) {
   return (
     <ReactFlowProvider>
@@ -147,6 +165,8 @@ function FlowCanvas({
         templatesOpen={templatesOpen}
         onTemplatesOpenChange={onTemplatesOpenChange}
         onSaveStatusChange={onSaveStatusChange}
+        onAiStatusChange={onAiStatusChange}
+        thinking={thinking}
       />
     </ReactFlowProvider>
   )
@@ -162,6 +182,8 @@ function FlowCanvasInner({
   templatesOpen,
   onTemplatesOpenChange,
   onSaveStatusChange,
+  onAiStatusChange,
+  thinking,
 }: FlowCanvasProps) {
   const { nodes, edges, onNodesChange, onEdgesChange, onDelete } =
     useLiveblocksFlow<CanvasNode, CanvasEdge>({
@@ -253,6 +275,22 @@ function FlowCanvasInner({
   const onMouseLeave = useCallback(() => {
     updateMyPresence({ cursor: null })
   }, [updateMyPresence])
+
+  // Publish this user's "prompting the AI" state to presence so other
+  // participants get a spinner on their cursor badge while they wait.
+  useEffect(() => {
+    updateMyPresence({ thinking })
+  }, [thinking, updateMyPresence])
+
+  // Subscribe to the shared AI status feed and surface the latest (validated)
+  // message to the workspace shell → AI sidebar. Feed contents come from shared
+  // realtime state, so every entry is validated before it's trusted.
+  const aiFeed = useStorage((root) => root[AI_STATUS_FEED_KEY])
+  useEffect(() => {
+    if (!onAiStatusChange) return
+    const latest = aiFeed && aiFeed.length > 0 ? aiFeed[aiFeed.length - 1] : null
+    onAiStatusChange(parseAiStatusMessage(latest))
+  }, [aiFeed, onAiStatusChange])
 
   // Liveblocks history, wired to both the control bar and keyboard shortcuts.
   const undo = useUndo()
@@ -394,6 +432,7 @@ function FlowCanvasInner({
       </ReactFlow>
 
       <LiveCursors containerRef={containerRef} />
+      <AiPresence containerRef={containerRef} />
       <PresenceAvatars />
 
       <CanvasControls />

@@ -1,19 +1,19 @@
 "use client"
 
 import {
+  Bot,
   Check,
   LayoutTemplate,
   Loader2,
   PanelLeftClose,
   PanelLeftOpen,
-  PanelRightClose,
-  PanelRightOpen,
   Save,
   Share2,
   TriangleAlert,
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
+import { cn } from "@/lib/utils"
 import type { SaveStatus } from "@/hooks/use-canvas-autosave"
 
 interface WorkspaceNavbarProps {
@@ -80,23 +80,48 @@ export function WorkspaceNavbar({
         </span>
       </div>
 
-      <div className="flex shrink-0 items-center gap-1">
+      <div className="flex shrink-0 items-center gap-2">
         <SaveIndicator status={saveStatus} />
-        <Button variant="outline" size="sm" onClick={onOpenTemplates}>
-          <LayoutTemplate />
-          Templates
-        </Button>
-        <Button variant="outline" size="sm" onClick={onShare}>
-          <Share2 />
-          Share
-        </Button>
+
+        {/* Divider between the passive save state and the action buttons. */}
+        <div className="h-5 w-px bg-border" />
+
+        {/* Secondary actions share one subtle, rounded pill group. */}
+        <div className="flex items-center gap-1 rounded-lg border border-border/70 bg-muted/40 p-0.5">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onOpenTemplates}
+            className="h-7 gap-1.5 rounded-md px-2.5 text-muted-foreground hover:bg-background hover:text-foreground"
+          >
+            <LayoutTemplate className="size-4" />
+            Templates
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onShare}
+            className="h-7 gap-1.5 rounded-md px-2.5 text-muted-foreground hover:bg-background hover:text-foreground"
+          >
+            <Share2 className="size-4" />
+            Share
+          </Button>
+        </div>
+
+        {/* Primary AI action — icon + label, with a cyan→green accent gradient
+            that ties the AI (cyan) and chat (green) accents together. */}
         <Button
-          variant="ghost"
-          size="icon-sm"
+          size="sm"
           onClick={onToggleAi}
           aria-label={isAiOpen ? "Close AI sidebar" : "Open AI sidebar"}
+          aria-pressed={isAiOpen}
+          className={cn(
+            "h-8 gap-1.5 rounded-lg bg-gradient-to-r from-primary to-[#62C073] px-3 font-semibold text-neutral-950 shadow-sm transition-all hover:opacity-90 hover:shadow-md",
+            isAiOpen && "ring-2 ring-primary/50 ring-offset-1 ring-offset-background",
+          )}
         >
-          {isAiOpen ? <PanelRightClose /> : <PanelRightOpen />}
+          <Bot className="size-4" />
+          AI
         </Button>
       </div>
     </nav>

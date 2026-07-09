@@ -9,7 +9,8 @@ change.
 
 ## Current Goal
 
-- Feature spec 21 - Canvas autosave & load
+- Feature spec 25 - Sidebar chat feed (real-time room chat via a separate
+  Liveblocks `ai-chat` feed, kept distinct from `ai-status-feed`)
 
 ## Completed
 
@@ -384,13 +385,182 @@ change.
   before saves work at runtime (build/typecheck don't need it). No AI generation
   logic (out of scope). `npm run build` passes; canvas route registered.
 
+- Feature spec 22 (design agent API): Trigger.dev backend wiring only, no AI
+  logic. New trigger/design-agent.ts — minimal `designAgent` task (id
+  "design-agent") reusing the existing @trigger.dev/sdk `task()` setup (matches
+  trigger/example.ts); payload { prompt, roomId }; logs the input and echoes it
+  back (no node/edge/canvas/AI work). Prisma: added TaskRun model to
+  prisma/models/project.prisma (id cuid, runId @unique, projectId, userId,
+  createdAt; @@index([runId]) + compound @@index([userId, projectId])) —
+  migration 20260709171422_add_task_run applied. New app/api/ai/design/route.ts
+  (POST): Clerk auth (401), validates prompt/roomId/projectId in body (400),
+  getAccessibleProject(projectId) so only owner/collaborator may trigger (404),
+  tasks.trigger<typeof designAgent>("design-agent", { prompt, roomId }), records
+  a TaskRun { runId: handle.id, projectId, userId }, returns { runId }. New
+  app/api/ai/design/token/route.ts (POST): auth (401), validates runId (400),
+  looks up TaskRun by runId and verifies userId matches the caller (404
+  otherwise), then auth.createPublicToken({ scopes: { read: { runs: [runId] } },
+  expirationTime: "1h" }) and returns { token }. NOTE: prisma generate hit a
+  transient EPERM renaming query_engine-windows.dll.node (OneDrive/dev-server
+  lock on the binary) — the TS client types regenerated fine (TaskRun present)
+  and the existing engine binary stayed in place, so `npm run build` passes and
+  both routes register. TRIGGER_SECRET_KEY / project ref (proj_kqtgascrlvyjbsqphmnl
+  in trigger.config.ts) must be configured for the trigger + token calls to work
+  at runtime. `npm run build` passes.
+
+- Feature spec 23 (design agent logic): the design agent now interprets a prompt
+  with Gemini and applies real changes to the collaborative canvas in real time,
+  with AI presence + a shared status feed visible to all participants.
+  trigger/design-agent.ts: the task (retry maxAttempts:1 — canvas edits aren't
+  idempotent across regenerated plans) uses createGoogleGenerativeAI({ apiKey:
+  GOOGLE_AI_API_KEY }) + generateObject (ai SDK, model "gemini-2.0-flash") with a
+  zod plan schema { summary, actions[] }. Actions are ONE flat object with a
+  `type` enum + optional fields (not a discriminated union — Gemini's structured
+  output handles a single object schema far more reliably than anyOf/oneOf):
+  addNode/moveNode/resizeNode/updateNode/deleteNode/addEdge/deleteEdge. It reads
+  the current canvas first (via mutateFlow read) so it can extend/edit by id
+  rather than recreate, then applies each action through @liveblocks/react-flow's
+  `mutateFlow` (from @liveblocks/react-flow/node) — the SAME storage the client's
+  useLiveblocksFlow uses, so AI edits behave like hand-drawn ones (no new state
+  system, no bypass of the collaborative flow). Nodes are built with the shared
+  types/canvas constants (CANVAS_NODE_TYPE, DEFAULT_EDGE_MARKER, NODE_COLORS
+  palette lookup, per-shape SHAPE_SIZE mirroring the shape panel) so generated
+  designs obey the allowed shapes + palette; the prompt encodes layout/spacing
+  rules (~220u horizontal / ~160u vertical between centers, no overlap, clear
+  flow, short labels).
+  AI presence + status feed: the background task has no Liveblocks presence
+  connection, so it publishes a plain-JSON GhostAiState (types/ai.ts — declared
+  as a `type`, not `interface`, so it carries the implicit index signature Lson
+  requires) into Liveblocks Storage under the new `ai` key
+  (liveblocks.config.ts Storage gained `ai?: GhostAiState | null` — optional so
+  rooms still need no initialStorage; the react-flow nodes/edges keep living
+  under react-flow's own storage key). The task flushes the whole object via the
+  node client's mutateStorage on each change: thinking/cursor/phase/status +
+  a rolling feed (capped at 8). Key steps push status (start "interpreting",
+  processing "<summary>", complete, or error); the AI cursor is parked at each
+  action's target (with 180ms waits) so participants watch the agent work, then
+  presence is cleared ~1.6s after completion. Errors are caught → error status
+  published → rethrown (single attempt, so no retry storm / duplicate diagram);
+  the canvas is never left broken.
+  Frontend: new components/editor/ai-presence.tsx (AiPresence) reads
+  useStorage(root => root.ai) and renders an AI cursor (cyan, flowToScreenPosition
+  + useViewport like LiveCursors) plus a floating top-center status pill
+  (phase icon: spinning Loader2 / CheckCircle2 / TriangleAlert). Rendered in
+  canvas.tsx FlowCanvasInner beside LiveCursors/PresenceAvatars; returns null
+  when idle. ai-sidebar.tsx ArchitectTab send now also fires POST /api/ai/design
+  ({ prompt, roomId, projectId } — all project.id) so a chat prompt actually
+  triggers the agent (progress streams onto the canvas via Liveblocks, so no run
+  subscription needed here — just a chat ack/failure line); AiSidebar gained a
+  projectId prop threaded from workspace-shell. NOTE: GOOGLE_AI_API_KEY,
+  LIVEBLOCKS_SECRET_KEY, and TRIGGER_SECRET_KEY must be configured for the agent
+  to run at runtime (build/typecheck don't need them). `npm run build` passes.
+
+- Feature spec 24 (AI presence state): shared AI activity indicators — UI +
+  presence + realtime status only (no new generation logic). types/tasks.ts:
+  new schema module for the shared AI status feed — AI_STATUS_FEED_KEY
+  ("ai-status-feed"), aiStatusPhaseSchema, aiStatusMessageSchema (zod object,
+  optional `text` + phase/active/at, generic enough for design AND later spec
+  generation), and parseAiStatusMessage() (safeParse → message | null) used to
+  validate every incoming feed entry before display. liveblocks.config.ts:
+  Storage gained `"ai-status-feed"?: AiStatusMessage[] | null` (optional, no
+  initialStorage needed) alongside the existing `ai` GhostAiState key. Reuses
+  the spec-23 realtime pipeline instead of adding parallel state: the design
+  agent (trigger/design-agent.ts) now, on each flushPresence, also
+  root.set(AI_STATUS_FEED_KEY, buildStatusFeed(ai)) — mapping its existing
+  rolling `ai.feed` (GhostAiActivity[]) to AiStatusMessage[] with the current
+  `active` flag, so the feed empties when presence clears.
+  Subscription is lifted through the room (AiSidebar sits OUTSIDE the Canvas'
+  RoomProvider, so it can't use Liveblocks hooks directly — same callback-lift
+  pattern as saveStatus): canvas.tsx FlowCanvasInner reads
+  useStorage(root => root["ai-status-feed"]), validates the latest entry via
+  parseAiStatusMessage, and reports it up through a new onAiStatusChange prop;
+  it also publishes the local user's `thinking` (new Canvas `thinking` prop) to
+  presence via updateMyPresence({ thinking }). WorkspaceShell owns aiStatus +
+  isThinking state, passing aiStatus/onThinkingChange to AiSidebar and
+  onAiStatusChange/thinking to Canvas. ai-sidebar.tsx ArchitectTab: derives
+  isGenerating (aiStatus.active) + isBusy (isSending || isGenerating) — shows a
+  role=status pill with the latest status text while generating, disables the
+  Textarea, and swaps the send icon for a spinning Loader2 (button disabled when
+  busy); send() flips onThinkingChange(true/false) around the request so other
+  participants see a spinner. live-cursors.tsx: Cursor reads
+  other.presence.thinking and renders a small spinning Loader2 before the name
+  badge when true (hidden when false/missing). Scope respected: no new
+  generation logic, no new task triggers, sidebar never dimmed as a whole, only
+  the most recent status shown. `npm run build` passes.
+
+- Feature spec 25 (sidebar chat feed): real-time room chat in the AI sidebar via
+  a NEW, separate Liveblocks `ai-chat` Storage feed — kept fully distinct from
+  spec-24's `ai-status-feed` (chat vs. AI progress never mixed). types/tasks.ts:
+  added AI_CHAT_KEY ("ai-chat"), aiChatRoleSchema ("user"|"assistant" — only
+  "user" used, no AI replies), aiChatSenderSchema ({ id, name, color?, avatar? }
+  mirroring Liveblocks UserMeta.info), aiChatMessageSchema ({ id, sender, role,
+  content, at }) + parseAiChatMessage() (safeParse → message | null) used to
+  validate every entry before render. liveblocks.config.ts Storage gained
+  `"ai-chat"?: AiChatMessage[] | null` alongside `ai` and `ai-status-feed`.
+  ARCHITECTURE CHANGE: the AiSidebar previously sat OUTSIDE the Canvas'
+  RoomProvider (spec 24 lifted its status up via a callback). Chat needs the
+  sidebar to both read AND write room storage, so the LiveblocksProvider +
+  RoomProvider were lifted UP from canvas.tsx into workspace-shell.tsx, now
+  wrapping both the canvas <main> and the AiSidebar in one shared room
+  (initialPresence { cursor:null, thinking:false } moved here). Canvas dropped
+  its own provider wrappers (keeps CanvasErrorBoundary + ClientSideSuspense);
+  spec-24's onAiStatusChange/thinking callback plumbing is unchanged and still
+  works. ai-sidebar.tsx ArchitectTab now uses non-suspense @liveblocks/react
+  hooks: useStorage(root => root["ai-chat"]) → validated message list rendered
+  in order; useSelf(me => me.id) to right-align own messages; useMutation
+  publishMessage appends { sender from self.info, role:"user", content, at } to
+  the feed (full-array set, capped MAX_CHAT_MESSAGES=100 — same pattern as the
+  other feeds). ChatBubble rewritten to show sender name (tinted to presence
+  color) + short local timestamp + content, own messages right-aligned. Send
+  clears the input on success and shows a small inline error (role=alert) on
+  failure. DESIGN DECISION worth confirming: the Architect input is also the
+  ONLY UI entry point to the design agent (specs 22-24), so rather than strand
+  that feature, send() is ADDITIVE — it publishes the message to `ai-chat` AND
+  still triggers the design agent (POST /api/ai/design) + sets presence.thinking
+  (spec 24). The scope limit "don't trigger backend AI tasks" is read as "the
+  chat feed itself introduces no backend AI task" (chat is pure Liveblocks);
+  ai-chat carries only human user-role messages, AI progress stays on the
+  separate ai-status-feed pill. If full chat/AI decoupling was intended instead,
+  drop the /api/ai/design fetch + onThinkingChange from send(). `npm run build`
+  passes.
+
+- Feature spec 26 (AI chat functional): wired the AI sidebar's Architect tab to
+  submit design prompts, track the Trigger.dev run in realtime, and reflect
+  AI-driven canvas updates via Liveblocks. app/api/ai/design/route.ts now also
+  mints a run-scoped public token (auth.createPublicToken, read scope on the new
+  run, 1h) and returns { runId, publicToken } — so the client subscribes without
+  a second call to the standalone /token route (which still exists). ai-sidebar
+  .tsx ArchitectTab: on send it publishes the user message to `ai-chat` (as
+  before), POSTs { prompt, roomId, projectId }, reads { runId, publicToken } into
+  local `run` state, then useRealtimeRun<typeof designAgent>(run?.id, {
+  accessToken: run?.token, enabled, onComplete }) subscribes to the run's
+  lifecycle only (canvas/edge/presence still stream in automatically through
+  Liveblocks — no manual node/edge sync). isRunActive = run set && !(run
+  .isCompleted || run.isFailed); combined with the room-wide `ai-status-feed`
+  active flag (isGenerating) into isWorking, which disables the textarea and
+  shows the compact status strip; isBusy (isSubmitting || isWorking) drives the
+  send-button spinner + disabled. onComplete pushes a final AI (assistant)
+  message to `ai-chat` ("Done…" or an error line), clears run state, and releases
+  presence.thinking; only the submitting client subscribes, so no duplicate
+  completion messages. Errors are surfaced as assistant messages in the `ai-chat`
+  feed (per spec) instead of the old inline error line. presence.thinking is set
+  true on submit and cleared in onComplete / on start failure.
+  COLOR DECISION: the spec's UI details explicitly name a green accent #62C073
+  for the user bubble background + send button (and green-accented status strip),
+  which conflicts with the "use existing tokens" note — there is no green token
+  (primary is cyan). Honored the explicit hex via a single ACCENT_GREEN constant
+  applied through inline styles (user bubble bg + dark text, send button bg,
+  status strip border/text); AI/other bubbles stay dark card + light text. No
+  backend design/Trigger.dev generation logic changed (only the token addition to
+  the existing route). `npm run build` passes.
+
 ## In Progress
 
 - None
 
 ## Next Up
 
-- Feature specs 22+
+- Feature specs 27+
 
 ## Open Questions
 

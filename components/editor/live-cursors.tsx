@@ -1,6 +1,7 @@
 "use client"
 
 import { useUser } from "@clerk/nextjs"
+import { Loader2 } from "lucide-react"
 import { useReactFlow, useViewport } from "@xyflow/react"
 import { useOthers } from "@liveblocks/react/suspense"
 
@@ -44,6 +45,8 @@ export function LiveCursors({ containerRef }: LiveCursorsProps) {
         const y = screen.y - (rect?.top ?? 0)
         const color = other.info?.color ?? FALLBACK_COLOR
         const name = other.info?.name ?? "Anonymous"
+        // Show a spinner in the badge while this participant is prompting the AI.
+        const thinking = other.presence.thinking === true
 
         return (
           <Cursor
@@ -52,6 +55,7 @@ export function LiveCursors({ containerRef }: LiveCursorsProps) {
             y={y}
             color={color}
             name={name}
+            thinking={thinking}
           />
         )
       })}
@@ -64,10 +68,12 @@ interface CursorProps {
   y: number
   color: string
   name: string
+  /** Whether this participant is currently prompting the AI (shows a spinner). */
+  thinking: boolean
 }
 
 /** A single colored pointer with a name badge attached. */
-function Cursor({ x, y, color, name }: CursorProps) {
+function Cursor({ x, y, color, name, thinking }: CursorProps) {
   return (
     <div
       className="absolute left-0 top-0"
@@ -89,9 +95,10 @@ function Cursor({ x, y, color, name }: CursorProps) {
         />
       </svg>
       <span
-        className="absolute left-4 top-4 whitespace-nowrap rounded px-1.5 py-0.5 text-xs font-medium text-white shadow-sm"
+        className="absolute left-4 top-4 flex items-center gap-1 whitespace-nowrap rounded px-1.5 py-0.5 text-xs font-medium text-white shadow-sm"
         style={{ backgroundColor: color }}
       >
+        {thinking ? <Loader2 className="size-3 shrink-0 animate-spin" /> : null}
         {name}
       </span>
     </div>
