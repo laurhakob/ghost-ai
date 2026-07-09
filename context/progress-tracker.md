@@ -9,7 +9,7 @@ change.
 
 ## Current Goal
 
-- Feature spec 20 - AI sidebar shell
+- Feature spec 21 - Canvas autosave & load
 
 ## Completed
 
@@ -347,13 +347,50 @@ change.
   subtle→muted, elevated→card, copy-primary→foreground. No Liveblocks/AI/
   backend logic (out of scope). `npm run build` passes.
 
+- Feature spec 21 (canvas autosave & load): the collaborative canvas now
+  persists to Vercel Blob with Prisma holding only the blob URL. Installed
+  @vercel/blob. Schema: reused the already-present Project.canvasJsonPath
+  String? (in prisma/models/project.prisma and the init migration) — no new
+  migration needed. New app/api/projects/[projectId]/canvas/route.ts: PUT
+  (auth → getAccessibleProject so any owner/collaborator may save; validates the
+  body has nodes[]+edges[]; put(`canvases/${projectId}.json`, JSON, {access:
+  "private", contentType:"application/json", allowOverwrite:true}) — stable
+  pathname + overwrite so each project keeps one blob; stores blob.url on
+  project.canvasJsonPath; returns { url }) and GET (auth + access, reads
+  canvasJsonPath, reads the blob via the authenticated get(url, {access:
+  "private", useCache:false}) helper and streams it to JSON, returns { nodes,
+  edges }; any missing/failed read degrades to EMPTY_CANVAS {nodes:[],edges:[]}).
+  NOTE: the configured Blob store is PRIVATE — access must be "private" on both
+  put and get; a public put or a plain fetch() of the blob URL is rejected
+  ("Cannot use public access on a private store").
+  New hooks/use-canvas-autosave.ts (useCanvasAutosave → SaveStatus
+  "idle"|"saving"|"saved"|"error"): watches a JSON signature of nodes+edges
+  (compared to avoid saving on Liveblocks reference churn), debounces
+  AUTOSAVE_DEBOUNCE_MS=1200ms, PUTs the signature to the canvas route; gated by
+  an `enabled` flag and skips the first enabled run so the just-loaded state
+  isn't re-saved. canvas.tsx: roomId threaded as projectId through
+  FlowCanvas → FlowCanvasInner, plus an onSaveStatusChange callback. On mount a
+  one-shot effect (hasLoadedRef guard) checks the suspense-synced room — if it
+  already has any nodes/edges it SKIPS the load (never overwrites active
+  collaboration) and just enables autosave; if empty it GETs the saved canvas
+  and, only when the payload is non-empty, adds nodes/edges via the synced
+  onNodesChange/onEdgesChange add-changes, then enables autosave in `finally`.
+  saveStatus is reported up via onSaveStatusChange. WorkspaceShell owns
+  saveStatus state (setSaveStatus passed to Canvas, saveStatus passed to navbar).
+  WorkspaceNavbar gained a SaveIndicator (role=status aria-live=polite) beside
+  Templates: Save/idle+Check/saved (text-primary), spinning Loader2/saving,
+  TriangleAlert/error (text-destructive). NOTE: BLOB_READ_WRITE_TOKEN already
+  present (empty) in .env.local — must be filled from the Vercel Blob store
+  before saves work at runtime (build/typecheck don't need it). No AI generation
+  logic (out of scope). `npm run build` passes; canvas route registered.
+
 ## In Progress
 
 - None
 
 ## Next Up
 
-- Feature specs 21+
+- Feature specs 22+
 
 ## Open Questions
 

@@ -1,5 +1,6 @@
 "use client"
 
+import Link from "next/link"
 import { Pencil, Plus, Trash2, X } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -41,14 +42,17 @@ function ProjectItem({
         isCurrent ? "bg-muted" : "hover:bg-muted/50"
       }`}
     >
-      <div className="flex min-w-0 flex-1 flex-col">
+      <Link
+        href={`/editor/${project.id}`}
+        className="flex min-w-0 flex-1 flex-col text-left"
+      >
         <span className="truncate text-sm text-foreground">
           {project.name}
         </span>
         <span className="truncate font-mono text-xs text-muted-foreground">
           {project.slug}
         </span>
-      </div>
+      </Link>
       {/* Actions only for owned projects. */}
       {project.owned && (
         <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover/item:opacity-100 focus-within:opacity-100">

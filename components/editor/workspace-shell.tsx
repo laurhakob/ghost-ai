@@ -8,6 +8,7 @@ import { ProjectDialogs } from "@/components/editor/project-dialogs"
 import { ProjectSidebar } from "@/components/editor/project-sidebar"
 import { ShareDialog } from "@/components/editor/share-dialog"
 import { WorkspaceNavbar } from "@/components/editor/workspace-navbar"
+import { type SaveStatus } from "@/hooks/use-canvas-autosave"
 import { useProjectActions } from "@/hooks/use-project-actions"
 import { type Project } from "@/lib/projects"
 
@@ -29,6 +30,7 @@ export function WorkspaceShell({
   const [isAiOpen, setIsAiOpen] = useState(false)
   const [isShareOpen, setIsShareOpen] = useState(false)
   const [isTemplatesOpen, setIsTemplatesOpen] = useState(false)
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle")
   const actions = useProjectActions()
 
   return (
@@ -41,6 +43,7 @@ export function WorkspaceShell({
         onToggleAi={() => setIsAiOpen((open) => !open)}
         onShare={() => setIsShareOpen(true)}
         onOpenTemplates={() => setIsTemplatesOpen(true)}
+        saveStatus={saveStatus}
       />
 
       <div className="relative flex-1 overflow-hidden">
@@ -61,6 +64,7 @@ export function WorkspaceShell({
             roomId={project.id}
             templatesOpen={isTemplatesOpen}
             onTemplatesOpenChange={setIsTemplatesOpen}
+            onSaveStatusChange={setSaveStatus}
           />
         </main>
 

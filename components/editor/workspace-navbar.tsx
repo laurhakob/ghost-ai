@@ -1,15 +1,20 @@
 "use client"
 
 import {
+  Check,
   LayoutTemplate,
+  Loader2,
   PanelLeftClose,
   PanelLeftOpen,
   PanelRightClose,
   PanelRightOpen,
+  Save,
   Share2,
+  TriangleAlert,
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
+import type { SaveStatus } from "@/hooks/use-canvas-autosave"
 
 interface WorkspaceNavbarProps {
   projectName: string
@@ -20,6 +25,33 @@ interface WorkspaceNavbarProps {
   onShare: () => void
   /** Opens the starter-templates import modal. */
   onOpenTemplates: () => void
+  /** Current canvas autosave status, shown in the Save indicator. */
+  saveStatus: SaveStatus
+}
+
+/** Icon + label + tone for each autosave status. */
+const SAVE_STATUS_DISPLAY: Record<
+  SaveStatus,
+  { icon: typeof Save; label: string; className: string }
+> = {
+  idle: { icon: Save, label: "Saved", className: "text-muted-foreground" },
+  saving: { icon: Loader2, label: "Saving…", className: "text-muted-foreground" },
+  saved: { icon: Check, label: "Saved", className: "text-primary" },
+  error: { icon: TriangleAlert, label: "Save failed", className: "text-destructive" },
+}
+
+function SaveIndicator({ status }: { status: SaveStatus }) {
+  const { icon: Icon, label, className } = SAVE_STATUS_DISPLAY[status]
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className={`flex items-center gap-1.5 px-2 text-xs font-medium ${className}`}
+    >
+      <Icon className={status === "saving" ? "size-3.5 animate-spin" : "size-3.5"} />
+      {label}
+    </div>
+  )
 }
 
 export function WorkspaceNavbar({
@@ -30,6 +62,7 @@ export function WorkspaceNavbar({
   onToggleAi,
   onShare,
   onOpenTemplates,
+  saveStatus,
 }: WorkspaceNavbarProps) {
   return (
     <nav className="flex h-12 w-full shrink-0 items-center justify-between gap-2 border-b border-border bg-background px-3">
@@ -48,6 +81,7 @@ export function WorkspaceNavbar({
       </div>
 
       <div className="flex shrink-0 items-center gap-1">
+        <SaveIndicator status={saveStatus} />
         <Button variant="outline" size="sm" onClick={onOpenTemplates}>
           <LayoutTemplate />
           Templates

@@ -1,6 +1,13 @@
 "use client"
 
-import { Component, useCallback, useRef, type ReactNode } from "react"
+import {
+  Component,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react"
 
 import {
   addEdge,
@@ -37,6 +44,7 @@ import { PresenceAvatars } from "@/components/editor/presence-avatars"
 import { ShapePanel } from "@/components/editor/shape-panel"
 import { StarterTemplatesModal } from "@/components/editor/starter-templates-modal"
 import type { CanvasTemplate } from "@/components/editor/starter-templates"
+import { useCanvasAutosave, type SaveStatus } from "@/hooks/use-canvas-autosave"
 import { useKeyboardShortcuts, ZOOM_ANIMATION_DURATION } from "@/hooks/use-keyboard-shortcuts"
 import {
   CANVAS_EDGE_TYPE,
@@ -83,21 +91,30 @@ interface CanvasProps {
   templatesOpen: boolean
   /** Toggles the starter-templates modal open/closed. */
   onTemplatesOpenChange: (open: boolean) => void
+  /** Reports the autosave status up to the workspace navbar. */
+  onSaveStatusChange?: (status: SaveStatus) => void
 }
 
 /**
  * Client-side canvas wrapper. Establishes the Liveblocks room for the given
  * project and renders the collaborative React Flow canvas inside it.
  */
-export function Canvas({ roomId, templatesOpen, onTemplatesOpenChange }: CanvasProps) {
+export function Canvas({
+  roomId,
+  templatesOpen,
+  onTemplatesOpenChange,
+  onSaveStatusChange,
+}: CanvasProps) {
   return (
     <LiveblocksProvider authEndpoint="/api/liveblocks-auth">
       <RoomProvider id={roomId} initialPresence={{ cursor: null, thinking: false }}>
         <CanvasErrorBoundary>
           <ClientSideSuspense fallback={<CanvasLoading />}>
             <FlowCanvas
+              projectId={roomId}
               templatesOpen={templatesOpen}
               onTemplatesOpenChange={onTemplatesOpenChange}
+              onSaveStatusChange={onSaveStatusChange}
             />
           </ClientSideSuspense>
         </CanvasErrorBoundary>
@@ -107,20 +124,29 @@ export function Canvas({ roomId, templatesOpen, onTemplatesOpenChange }: CanvasP
 }
 
 interface FlowCanvasProps {
+  projectId: string
   templatesOpen: boolean
   onTemplatesOpenChange: (open: boolean) => void
+  onSaveStatusChange?: (status: SaveStatus) => void
 }
 
 /**
  * Provides React Flow context so the inner canvas can convert screen
  * coordinates to canvas space when shapes are dropped.
  */
-function FlowCanvas({ templatesOpen, onTemplatesOpenChange }: FlowCanvasProps) {
+function FlowCanvas({
+  projectId,
+  templatesOpen,
+  onTemplatesOpenChange,
+  onSaveStatusChange,
+}: FlowCanvasProps) {
   return (
     <ReactFlowProvider>
       <FlowCanvasInner
+        projectId={projectId}
         templatesOpen={templatesOpen}
         onTemplatesOpenChange={onTemplatesOpenChange}
+        onSaveStatusChange={onSaveStatusChange}
       />
     </ReactFlowProvider>
   )
@@ -131,7 +157,12 @@ function FlowCanvas({ templatesOpen, onTemplatesOpenChange }: FlowCanvasProps) {
  * empty and stay in sync across everyone in the room. Shapes dragged from the
  * bottom panel are dropped here to create new nodes.
  */
-function FlowCanvasInner({ templatesOpen, onTemplatesOpenChange }: FlowCanvasProps) {
+function FlowCanvasInner({
+  projectId,
+  templatesOpen,
+  onTemplatesOpenChange,
+  onSaveStatusChange,
+}: FlowCanvasProps) {
   const { nodes, edges, onNodesChange, onEdgesChange, onDelete } =
     useLiveblocksFlow<CanvasNode, CanvasEdge>({
       suspense: true,
@@ -145,6 +176,66 @@ function FlowCanvasInner({ templatesOpen, onTemplatesOpenChange }: FlowCanvasPro
   const counterRef = useRef(0)
   // The canvas container, used to offset live-cursor overlay positions.
   const containerRef = useRef<HTMLDivElement>(null)
+
+  // Load saved canvas state once, then hand off to autosave. Autosave stays
+  // disabled until the load check finishes so it can't clobber the saved blob.
+  const [autosaveEnabled, setAutosaveEnabled] = useState(false)
+  const hasLoadedRef = useRef(false)
+  useEffect(() => {
+    if (hasLoadedRef.current) return
+    hasLoadedRef.current = true
+
+    // The room already has active collaboration — never overwrite it with the
+    // saved snapshot; just start autosaving.
+    if (nodes.length > 0 || edges.length > 0) {
+      setAutosaveEnabled(true)
+      return
+    }
+
+    let cancelled = false
+    void (async () => {
+      try {
+        const res = await fetch(`/api/projects/${projectId}/canvas`)
+        if (res.ok && !cancelled) {
+          const saved = (await res.json()) as {
+            nodes?: CanvasNode[]
+            edges?: CanvasEdge[]
+          }
+          const savedNodes = saved.nodes ?? []
+          const savedEdges = saved.edges ?? []
+          if (savedNodes.length > 0 || savedEdges.length > 0) {
+            onNodesChange(
+              savedNodes.map((node) => ({ type: "add", item: node })),
+            )
+            onEdgesChange(
+              savedEdges.map((edge) => ({ type: "add", item: edge })),
+            )
+          }
+        }
+      } catch {
+        // Loading failed — start with the empty room and let autosave recover.
+      } finally {
+        if (!cancelled) setAutosaveEnabled(true)
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+    // Runs exactly once on mount; the initial snapshot decides load vs. skip.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Debounced autosave to Vercel Blob, surfaced as a status in the navbar.
+  const saveStatus = useCanvasAutosave({
+    projectId,
+    nodes,
+    edges,
+    enabled: autosaveEnabled,
+  })
+  useEffect(() => {
+    onSaveStatusChange?.(saveStatus)
+  }, [saveStatus, onSaveStatusChange])
 
   // Broadcast this user's cursor position (in canvas coordinates) so it stays
   // anchored to the diagram for everyone else, regardless of their own view.
