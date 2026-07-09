@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState, type KeyboardEvent } from "react"
+import { useCallback, useEffect, useMemo, useState, type KeyboardEvent } from "react"
 import {
   Bot,
   Download,
@@ -8,6 +8,7 @@ import {
   Loader2,
   Send,
   Sparkles,
+  TriangleAlert,
   X,
 } from "lucide-react"
 import { useMutation, useSelf, useStorage } from "@liveblocks/react"
@@ -22,7 +23,9 @@ import {
   TabsTrigger,
 } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
+import { SpecPreviewModal } from "@/components/editor/spec-preview-modal"
 import type { designAgent } from "@/trigger/design-agent"
+import type { generateSpec } from "@/trigger/generate-spec"
 import {
   AI_CHAT_KEY,
   parseAiChatMessage,
@@ -435,44 +438,270 @@ function ArchitectTab({
   )
 }
 
-function SpecsTab() {
+/** Metadata for a single generated spec, as returned by the specs list route. */
+interface SpecListItem {
+  id: string
+  createdAt: string
+}
+
+/** Derives the download filename for a spec — matches the download route. */
+function specFilename(id: string): string {
+  return `spec-${id}.md`
+}
+
+/** Formats an ISO timestamp as a readable local date + time. */
+function formatSpecDate(iso: string): string {
+  return new Date(iso).toLocaleString([], {
+    dateStyle: "medium",
+    timeStyle: "short",
+  })
+}
+
+/**
+ * Triggers a browser download of a spec via the authenticated download route.
+ * The route sends the file as an attachment, so a temporary anchor click lets
+ * the browser save it without the client ever touching the Blob store.
+ */
+function downloadSpec(projectId: string, specId: string) {
+  const anchor = document.createElement("a")
+  anchor.href = `/api/projects/${projectId}/specs/${specId}/download`
+  anchor.download = specFilename(specId)
+  document.body.appendChild(anchor)
+  anchor.click()
+  anchor.remove()
+}
+
+function SpecsTab({ projectId }: { projectId: string }) {
+  // null while loading; an array (possibly empty) once loaded.
+  const [specs, setSpecs] = useState<SpecListItem[] | null>(null)
+  const [loadError, setLoadError] = useState(false)
+  // The spec currently open in the preview modal, or null when closed.
+  const [previewId, setPreviewId] = useState<string | null>(null)
+  // The POST /api/ai/spec + token request is in flight (before the run tracks).
+  const [isStarting, setIsStarting] = useState(false)
+  // The active spec-generation run to subscribe to, or null when idle.
+  const [run, setRun] = useState<{ id: string; token: string } | null>(null)
+  // A user-facing error from the last generation attempt, or null.
+  const [genError, setGenError] = useState<string | null>(null)
+
+  // The room chat feed feeds context into the spec. Read it from shared storage
+  // (the sidebar sits inside the room) and map to the task's { role, content }.
+  const rawChat = useStorage((root) => root[AI_CHAT_KEY])
+  const chatHistory = useMemo(() => {
+    if (!rawChat) return []
+    return rawChat
+      .map(parseAiChatMessage)
+      .filter((message): message is AiChatMessage => message !== null)
+      .map((message) => ({ role: message.role, content: message.content }))
+  }, [rawChat])
+
+  const loadSpecs = useCallback(async (): Promise<void> => {
+    setLoadError(false)
+    try {
+      const res = await fetch(`/api/projects/${projectId}/specs`)
+      if (!res.ok) throw new Error(`Request failed: ${res.status}`)
+      const data = (await res.json()) as { specs?: SpecListItem[] }
+      setSpecs(data.specs ?? [])
+    } catch {
+      setLoadError(true)
+      setSpecs([])
+    }
+  }, [projectId])
+
+  useEffect(() => {
+    setSpecs(null)
+    void loadSpecs()
+  }, [loadSpecs])
+
+  // Subscribe to the active spec run's lifecycle. The run's metadata carries a
+  // human status (set by the task) for the progress strip; on completion we
+  // reload the list so the freshly persisted spec appears.
+  const { run: realtimeRun } = useRealtimeRun<typeof generateSpec>(run?.id, {
+    accessToken: run?.token,
+    enabled: run !== null,
+    onComplete: (completed, err) => {
+      setRun(null)
+      if (err || completed.isFailed) {
+        setGenError("Spec generation failed. Please try again.")
+      } else {
+        void loadSpecs()
+      }
+    },
+  })
+
+  // The run is active until it resolves. isBusy also covers the initial POST.
+  const isRunActive =
+    run !== null && !(realtimeRun?.isCompleted || realtimeRun?.isFailed)
+  const isBusy = isStarting || isRunActive
+  // Human status from the task's run metadata, shown while generating.
+  const statusText =
+    typeof realtimeRun?.metadata?.status === "string"
+      ? realtimeRun.metadata.status
+      : "Generating spec…"
+
+  const generateSpecRun = async () => {
+    if (isBusy) return
+    setGenError(null)
+    setIsStarting(true)
+    try {
+      // 1) Grab the latest saved canvas snapshot (autosaved) as the spec's
+      //    structural input — reuses the existing canvas endpoint rather than
+      //    reaching into the collaborative flow state from here.
+      const canvasRes = await fetch(`/api/projects/${projectId}/canvas`)
+      if (!canvasRes.ok) throw new Error(`Canvas fetch failed: ${canvasRes.status}`)
+      const canvas = (await canvasRes.json()) as {
+        nodes?: unknown[]
+        edges?: unknown[]
+      }
+
+      // 2) Trigger the generate-spec task. Access is derived server-side from
+      //    the roomId + authenticated user; projectId is never trusted there.
+      const res = await fetch("/api/ai/spec", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          roomId: projectId,
+          nodes: canvas.nodes ?? [],
+          edges: canvas.edges ?? [],
+          chatHistory,
+        }),
+      })
+      if (!res.ok) throw new Error(`Trigger failed: ${res.status}`)
+      const { runId } = (await res.json()) as { runId?: string }
+      if (!runId) throw new Error("Malformed response")
+
+      // 3) Mint a run-scoped public token so we can subscribe in realtime.
+      const tokenRes = await fetch("/api/ai/spec/token", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ runId }),
+      })
+      if (!tokenRes.ok) throw new Error(`Token failed: ${tokenRes.status}`)
+      const { token } = (await tokenRes.json()) as { token?: string }
+      if (!token) throw new Error("Malformed token response")
+
+      setRun({ id: runId, token })
+    } catch {
+      setGenError("Couldn't start spec generation. Please try again.")
+    } finally {
+      setIsStarting(false)
+    }
+  }
+
+  const previewSpec = useMemo(() => {
+    if (!previewId || !specs) return null
+    const found = specs.find((spec) => spec.id === previewId)
+    if (!found) return null
+    return {
+      id: found.id,
+      filename: specFilename(found.id),
+      createdAt: found.createdAt,
+    }
+  }, [previewId, specs])
+
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
       <Button
         type="button"
-        className="w-full bg-primary text-white hover:bg-primary/80"
+        onClick={() => void generateSpecRun()}
+        disabled={isBusy}
+        className="w-full bg-primary text-white hover:bg-primary/80 disabled:opacity-60"
       >
-        <Sparkles />
-        Generate Spec
+        {isBusy ? <Loader2 className="animate-spin" /> : <Sparkles />}
+        {isBusy ? "Generating…" : "Generate Spec"}
       </Button>
 
-      {/* Static demo spec card. */}
-      <Card className="gap-3 border-border bg-card p-4">
-        <div className="flex items-start gap-3">
-          <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-primary">
-            <FileText className="size-5" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <h3 className="truncate text-sm font-medium text-foreground">
-              E-commerce Backend Spec
-            </h3>
-            <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
-              A service-oriented architecture covering catalog, cart, checkout,
-              and order fulfillment with an event-driven inventory system.
-            </p>
-          </div>
-        </div>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          disabled
-          className="w-full"
+      {/* Realtime progress while a run is active. */}
+      {isBusy ? (
+        <div
+          role="status"
+          aria-live="polite"
+          className="flex items-center gap-2 rounded-xl border border-primary/40 bg-primary/[0.06] px-3 py-2 text-xs text-primary"
         >
-          <Download />
-          Download
-        </Button>
-      </Card>
+          <Loader2 className="size-3.5 shrink-0 animate-spin" />
+          <span className="truncate">{statusText}</span>
+        </div>
+      ) : null}
+
+      {/* Last generation error, if any. */}
+      {genError ? (
+        <div
+          role="alert"
+          className="flex items-center gap-2 rounded-xl border border-destructive/40 bg-destructive/[0.06] px-3 py-2 text-xs text-destructive"
+        >
+          <TriangleAlert className="size-3.5 shrink-0" />
+          <span>{genError}</span>
+        </div>
+      ) : null}
+
+      {specs === null ? (
+        <div className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground">
+          <Loader2 className="size-4 animate-spin" />
+          Loading specs…
+        </div>
+      ) : loadError ? (
+        <div className="flex flex-col items-center gap-3 py-8 text-center">
+          <TriangleAlert className="size-5 text-destructive" />
+          <p className="text-sm text-muted-foreground">
+            Couldn&apos;t load specs.
+          </p>
+          <Button type="button" variant="outline" size="sm" onClick={() => void loadSpecs()}>
+            Retry
+          </Button>
+        </div>
+      ) : specs.length === 0 ? (
+        <div className="flex flex-col items-center gap-2 py-8 text-center">
+          <FileText className="size-6 text-muted-foreground/50" />
+          <p className="text-sm text-muted-foreground">No specs yet.</p>
+          <p className="max-w-[15rem] text-xs text-muted-foreground/70">
+            Generated specs for this project will appear here.
+          </p>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-2">
+          {specs.map((spec) => (
+            <Card
+              key={spec.id}
+              className="gap-3 border-border bg-card p-3 transition-colors hover:border-primary/40"
+            >
+              <button
+                type="button"
+                onClick={() => setPreviewId(spec.id)}
+                className="flex w-full items-center gap-3 text-left"
+              >
+                <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-primary">
+                  <FileText className="size-5" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h3 className="truncate text-sm font-medium text-foreground">
+                    {specFilename(spec.id)}
+                  </h3>
+                  <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                    {formatSpecDate(spec.createdAt)}
+                  </p>
+                </div>
+              </button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="w-full"
+                onClick={() => downloadSpec(projectId, spec.id)}
+              >
+                <Download />
+                Download
+              </Button>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      <SpecPreviewModal
+        projectId={projectId}
+        spec={previewSpec}
+        onClose={() => setPreviewId(null)}
+        onDownload={(spec) => downloadSpec(projectId, spec.id)}
+      />
     </div>
   )
 }
@@ -542,7 +771,7 @@ export function AiSidebar({
           value="specs"
           className="flex min-h-0 flex-col data-[state=inactive]:hidden"
         >
-          <SpecsTab />
+          <SpecsTab projectId={projectId} />
         </TabsContent>
       </Tabs>
     </aside>

@@ -9,8 +9,7 @@ change.
 
 ## Current Goal
 
-- Feature spec 25 - Sidebar chat feed (real-time room chat via a separate
-  Liveblocks `ai-chat` feed, kept distinct from `ai-status-feed`)
+- Feature spec 30+ (next up)
 
 ## Completed
 
@@ -554,13 +553,116 @@ change.
   backend design/Trigger.dev generation logic changed (only the token addition to
   the existing route). `npm run build` passes.
 
+- Feature spec 27 (spec generation flow): backend AI-powered Markdown spec
+  generation, mirroring the design flow's auth/ownership/Trigger.dev patterns.
+  No frontend/editor UI (out of scope). New trigger/generate-spec.ts —
+  `generateSpec` task (id "generate-spec") accepts { projectId, roomId,
+  chatHistory, nodes, edges }, re-validates the whole payload with Zod
+  (inputSchema: loose passthrough node/edge schemas reading only id/data.label/
+  data.shape/position + source/target, chatHistory as { role?, content }[], all
+  three arrays .default([])); uses Gemini via createGoogleGenerativeAI +
+  generateText (ai SDK) with the SAME MODEL_CANDIDATES fallback list as the
+  design agent (gemini-flash-latest → flash-lite-latest → 2.5-flash-lite,
+  maxRetries 3). Builds a prompt from the canvas snapshot (nodes/edges) + chat
+  history and asks for GFM Markdown ONLY (title + Overview/Goals/Architecture/
+  Data Flow/APIs/Data Model/Open Questions sections, grounded in the actual
+  inputs, no whole-doc code fence); returns { projectId, roomId, spec } as task
+  output (plain Markdown). Realtime tracking via run METADATA (not Liveblocks —
+  spec gen is a per-user doc, not shared room state): setStatus() writes
+  metadata phase ("thinking"/"processing"/"complete"/"error") + human status on
+  each step, guarded so it no-ops outside a run context. Retries left at the
+  project default (task is read-only/idempotent, unlike the non-idempotent
+  design agent which opts out). trigger/example.ts does not exist; patterns were
+  taken from trigger/design-agent.ts. New app/api/ai/spec/route.ts (POST): Clerk
+  auth (401), validates roomId (string) + nodes/edges (arrays) + optional
+  chatHistory (array) in body (400), getAccessibleProject(roomId, identity) so
+  only owner/collaborator may trigger (404) — projectId is DERIVED from the
+  resolved project (project.id), NEVER taken from the client; tasks.trigger<
+  typeof generateSpec>("generate-spec", payload) with project.id as the trusted
+  projectId, records a TaskRun { runId, projectId, userId }, returns { runId }.
+  New app/api/ai/spec/token/route.ts (POST): identical to the design token route
+  — auth (401), validates runId (400), looks up TaskRun by runId and verifies
+  userId matches the caller (404 otherwise), auth.createPublicToken({ scopes:
+  { read: { runs: [runId] } }, expirationTime: "1h" }), returns { token }.
+  Reused the existing TaskRun model (no schema/migration change), lib/project-
+  access, lib/prisma, and the @trigger.dev/sdk auth/tasks helpers. GOOGLE_AI_API_KEY
+  + TRIGGER_SECRET_KEY must be configured for runtime. `npm run build` passes;
+  both /api/ai/spec and /api/ai/spec/token routes register.
+
+- Feature spec 28 (spec persistence & download): generated specs are now
+  persisted (Prisma = metadata, Vercel Blob = content) and downloadable behind
+  access checks. Backend only, no UI (out of scope). Schema: new ProjectSpec
+  model in prisma/models/project.prisma (id cuid, projectId, filePath, createdAt,
+  @@index([projectId, createdAt]), project relation onDelete: Cascade) + a
+  `specs ProjectSpec[]` back-relation on Project — migration
+  20260709221546_add_project_spec applied (prisma generate hit the same known
+  EPERM DLL-rename lock as spec 22; TS client types regenerated fine, ProjectSpec
+  present). Persistence lives in the generateSpec task (trigger/generate-spec.ts):
+  after drafting, it uploads the Markdown to Vercel Blob via
+  put(`specs/${projectId}/${randomUUID()}.md`, spec, { access: "private",
+  contentType: "text/markdown" }) — private store + unique per-spec path (a
+  project accumulates a spec history, unlike the single stable-path canvas blob) —
+  then prisma.projectSpec.create({ projectId, filePath: blob.url }); the task
+  return now includes specId. Follows the canvas metadata+blob pattern (private
+  access; content never in Prisma). New app/api/projects/[projectId]/specs/
+  [specId]/download/route.ts (GET): Clerk auth (401), getAccessibleProject(
+  projectId) so only owner/collaborator may download (404), looks up ProjectSpec
+  by specId and verifies spec.projectId === projectId (404 — never serve a spec
+  by id alone across projects), reads the Markdown from the private blob via the
+  authenticated get(filePath, { access: "private", useCache: false }) helper (404
+  on missing/failed read), and returns it as a Markdown attachment (Content-Type
+  text/markdown; charset=utf-8, Content-Disposition attachment;
+  filename="spec-<id>.md"). Existing canvas persistence untouched. Reused
+  lib/project-access, lib/prisma, and @vercel/blob (already installed). Runtime
+  needs BLOB_READ_WRITE_TOKEN + DATABASE_URL (task) as before. `npm run build`
+  passes; the download route registers.
+
+- Feature spec 29 (spec UI integration): the AI sidebar Specs tab now lists,
+  previews, and downloads real generated specs (frontend only + one thin read
+  route). GAP FILLED: the spec assumed an "existing ProjectSpec API" to list
+  specs, but spec 28 only built the per-spec download route — so added a minimal
+  GET app/api/projects/[projectId]/specs/route.ts returning metadata only
+  ({ id, createdAt }, ordered createdAt desc) behind the same getAccessibleProject
+  owner/collaborator check; no blob/generation logic (that stays in specs 27/28).
+  ai-sidebar.tsx SpecsTab (now takes projectId) replaces the old static demo card:
+  fetches the list on mount/projectId change (loadSpecs, useCallback) with
+  loading / error+Retry / empty states; each spec renders as a compact clickable
+  Card (FileText badge + derived filename `spec-<id>.md` + local createdAt) that
+  opens the preview, plus an outline Download button. The Generate Spec button is
+  left as the existing static element (wiring generation is out of spec-29 scope).
+  Download uses a temporary <a download> pointed at the authenticated download
+  route (browser handles the save; client never touches the Blob store). New
+  components/editor/spec-preview-modal.tsx (SpecPreviewModal): shadcn Dialog +
+  ScrollArea; on open it fetches the spec content via fetch() of the SAME download
+  route (fetch reads the body regardless of the attachment header — no direct Blob
+  access) and renders it with react-markdown (newly installed dep) through an
+  explicit MARKDOWN_COMPONENTS tailwind map (no typography plugin needed, existing
+  tokens only); loading/error states, Download in the footer, Esc/close via Dialog.
+  Content is fetched fresh per open and dropped on close — never held in long-term
+  state (respects the scope limit). No new global state, no sidebar/tab redesign.
+  `npm run build` + TypeScript pass; the specs list route registers.
+  FOLLOW-UP (post spec 29): wired the previously-inert "Generate Spec" button in
+  ai-sidebar.tsx SpecsTab to the existing spec-27 backend. On click it fetches the
+  latest saved canvas snapshot (GET /api/projects/[id]/canvas) + the room chat
+  (Liveblocks `ai-chat` via useStorage), POSTs /api/ai/spec ({ roomId, nodes,
+  edges, chatHistory }), mints a run token via /api/ai/spec/token, then tracks the
+  run with useRealtimeRun<typeof generateSpec> — a progress strip shows the task's
+  run-metadata status, and onComplete reloads the spec list so the new spec
+  appears (or shows an error). Reused existing endpoints only; no backend change.
+  RUNTIME NOTE: the run only executes if the Trigger.dev dev worker is running
+  (`npx trigger.dev@latest dev`) with GOOGLE_AI_API_KEY / TRIGGER_SECRET_KEY /
+  BLOB_READ_WRITE_TOKEN / DATABASE_URL set — otherwise the run just queues.
+  Also: the earlier `prisma.projectSpec` undefined 500 was a stale cached Prisma
+  client in the running dev server (client on disk was correct) — fixed by
+  restarting the dev server.
+
 ## In Progress
 
 - None
 
 ## Next Up
 
-- Feature specs 27+
+- Feature specs 30+
 
 ## Open Questions
 
