@@ -9,7 +9,7 @@ change.
 
 ## Current Goal
 
-- Feature spec 19 - Presence avatars & live cursors
+- Feature spec 20 - AI sidebar shell
 
 ## Completed
 
@@ -313,13 +313,47 @@ change.
   No navbar, node/edge, or Clerk profile-behavior changes (out of scope). `npm
   run build` passes.
 
+- Feature spec 20 (AI sidebar shell): extracted the inline right-hand AI chat
+  placeholder from workspace-shell.tsx into components/editor/ai-sidebar.tsx
+  (AiSidebar; open/close still owned by WorkspaceShell's isAiOpen — onClose
+  wired, no open/close rebuild). Now a floating right aside (absolute top-12
+  right-0 z-40, w-96, h-[calc(100%-3rem)]) that slides in with translate-x
+  (translate-x-full ↔ translate-x-0, duration-200 ease-in-out), matching the
+  ProjectSidebar slide pattern; surface uses bg-background/95 backdrop-blur,
+  border-l border-border, shadow-2xl. Header: bot icon + "AI Workspace"
+  (text-foreground) / "Collaborate with Ghost AI" (text-muted-foreground) +
+  right-aligned close (X). shadcn Tabs (AI Architect / Specs), TabsTrigger given
+  accent active styling (data-active:bg-primary/15 data-active:text-primary,
+  inactive text-muted-foreground). Architect tab: scrollable chat area, empty
+  state (bot icon + description + three starter-prompt pills — "Design an
+  e-commerce backend", "Create a chat app architecture", "Build a CI/CD
+  pipeline" — styled bg-muted text-primary soft pills that fill the input on
+  click); user bubbles right-aligned (border-2 border-primary/50 bg-primary/10
+  text-foreground), assistant bubbles left-aligned (border border-border bg-card
+  text-primary); input row = shadcn Textarea (field-sizing-content auto-resize,
+  min-h-[72px] max-h-40) + icon send Button (bg-primary text-white); Enter
+  submits, Shift+Enter newline; send appends a user ChatMessage to local state
+  only (no backend/AI generation). Specs tab: full-width "Generate Spec" button
+  (bg-primary text-white) + one static demo spec Card (bg-card border-border,
+  FileText icon, title, snippet, disabled Download button).
+  TOKEN MAPPING NOTE: the spec's token names (bg-base, border-surface-border,
+  text-primary-text, text-muted-text, bg-accent/text-accent, bg-subtle,
+  text-accent-text, bg-brand-dim/border-brand, text-copy-primary, bg-elevated)
+  do not exist — globals.css only holds shadcn tokens and ui-context.md is still
+  the template. Per spec step 6 (reuse existing tokens, don't invent), mapped
+  them to the nearest shadcn tokens: base→background, surface-border→border,
+  primary-text→foreground, muted-text→muted-foreground, accent/brand→primary
+  (the vivid cyan interactive color; shadcn `accent` is a muted surface here),
+  subtle→muted, elevated→card, copy-primary→foreground. No Liveblocks/AI/
+  backend logic (out of scope). `npm run build` passes.
+
 ## In Progress
 
 - None
 
 ## Next Up
 
-- Feature specs 20+
+- Feature specs 21+
 
 ## Open Questions
 

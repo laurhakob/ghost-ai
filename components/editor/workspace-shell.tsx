@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 
+import { AiSidebar } from "@/components/editor/ai-sidebar"
 import { Canvas } from "@/components/editor/canvas"
 import { ProjectDialogs } from "@/components/editor/project-dialogs"
 import { ProjectSidebar } from "@/components/editor/project-sidebar"
@@ -54,30 +55,17 @@ export function WorkspaceShell({
           onDeleteProject={actions.openDelete}
         />
 
-        <div className="flex h-full">
-          {/* Collaborative canvas — fills the remaining space. */}
-          <main className="relative flex-1 overflow-hidden bg-neutral-950">
-            <Canvas
-              roomId={project.id}
-              templatesOpen={isTemplatesOpen}
-              onTemplatesOpenChange={setIsTemplatesOpen}
-            />
-          </main>
+        {/* Collaborative canvas — fills the remaining space. */}
+        <main className="relative h-full overflow-hidden bg-neutral-950">
+          <Canvas
+            roomId={project.id}
+            templatesOpen={isTemplatesOpen}
+            onTemplatesOpenChange={setIsTemplatesOpen}
+          />
+        </main>
 
-          {/* Right sidebar placeholder for the future AI chat. */}
-          {isAiOpen && (
-            <aside className="flex w-80 shrink-0 flex-col border-l border-border bg-background">
-              <div className="flex h-12 shrink-0 items-center border-b border-border px-3">
-                <span className="text-sm font-medium text-foreground">
-                  AI Assistant
-                </span>
-              </div>
-              <div className="flex flex-1 items-center justify-center p-4 text-center text-sm text-muted-foreground">
-                AI chat coming soon
-              </div>
-            </aside>
-          )}
-        </div>
+        {/* Floating AI chat sidebar — slides in from the right. */}
+        <AiSidebar isOpen={isAiOpen} onClose={() => setIsAiOpen(false)} />
       </div>
 
       <ProjectDialogs actions={actions} />
