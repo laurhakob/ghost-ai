@@ -379,6 +379,9 @@ function FlowCanvasInner({
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
         onDelete={onDelete}
+        // Bind both keys: React Flow's default `deleteKeyCode` is only
+        // "Backspace", which leaves the Delete key doing nothing.
+        deleteKeyCode={["Backspace", "Delete"]}
         onMouseMove={onMouseMove}
         onMouseLeave={onMouseLeave}
         connectionMode={ConnectionMode.Loose}
