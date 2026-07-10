@@ -5,13 +5,8 @@ import { PrismaClient } from "@/app/generated/prisma/client"
 const connectionString = process.env.DATABASE_URL
 
 function createPrismaClient(): PrismaClient {
-  // Prisma Postgres connection strings go through Accelerate — the client
-  // talks to it directly, so no local driver adapter is needed.
-  if (connectionString?.startsWith("prisma+postgres://")) {
-    return new PrismaClient()
-  }
-
-  // Direct Postgres connection via the pg driver adapter.
+  // The client is engine-free (queryCompiler), so a driver adapter is
+  // required. We connect directly to Postgres via the pg driver adapter.
   const adapter = new PrismaPg({ connectionString })
   return new PrismaClient({ adapter })
 }
